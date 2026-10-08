@@ -1,3 +1,4 @@
+import { evaluateCriteria, type CriterionStatus } from "./acceptance-criteria.ts";
 import type { JournalEvent } from "./journal.ts";
 import type { Verdict } from "./run-test-case.ts";
 import { stepRef } from "./test-case.ts";
@@ -14,6 +15,42 @@ const badge = (verdict?: Verdict) =>
   verdict ? `<b style="color:${COLOR[verdict]}">${esc(verdict)}</b>` : `<span style="color:#6e7781">not attempted</span>`;
 
 type StepDef = { n: number; kind: string; text: string };
+
+const STATUS_COLOR: Record<CriterionStatus, string> = { Met: "#1a7f37", Unmet: "#cf222e", Unverified: "#9a6700" };
+const caseAnchor = (file: string) => `case-${file}`;
+
+/** The Acceptance Criteria table: each criterion of the covered issues, its status and covering Test Cases. */
+function criteriaSection(events: Array<Record<string, any>>): string {
+  const { criteria, problems } = evaluateCriteria(events);
+  if (!criteria.length && !problems.length) return "";
+  const issueUrl = new Map<number, string>();
+  const caseTitle = new Map<string, string>();
+  for (const e of events) {
+    if (e.event === "issue.read") issueUrl.set(e.issue, e.url);
+    if (e.event === "issue.unreadable") issueUrl.set(e.issue, `https://github.com/${e.repo}/issues/${e.issue}`);
+    if (e.event === "case.started" || e.event === "case.skipped") caseTitle.set(e.file, e.title);
+  }
+  const rows = criteria.map((c) => {
+    const id = c.tag ? `#${c.issue}/${c.tag}` : `#${c.issue}`;
+    const by = c.coveredBy.map((b) => `<a href="#${esc(caseAnchor(b.file))}">${esc(caseTitle.get(b.file) ?? b.file)}</a> ${badge(b.verdict as Verdict | undefined)}`);
+    return `<tr>
+  <td><a href="${esc(issueUrl.get(c.issue) ?? "")}">${esc(id)}</a></td>
+  <td>${esc(c.text)}</td>
+  <td><b style="color:${STATUS_COLOR[c.status]}">${c.status}</b>${c.warning ? `<br><small>${esc(c.warning)}</small>` : ""}</td>
+  <td>${by.join("<br>") || "<small>no Test Case covers it</small>"}</td>
+</tr>`;
+  }).join("\n");
+  const problemList = problems.length
+    ? `<p>Coverage that points at nothing:</p><ul>${problems.map((p) => `<li>${esc(`${p.file} covers ${p.cover}: ${p.problem}`)}</li>`).join("")}</ul>`
+    : "";
+  return `<section>
+<h2>Acceptance Criteria</h2>
+<table><tr><th>Criterion</th><th>Text</th><th>Status</th><th>Covered by</th></tr>
+${rows}
+</table>
+${problemList}
+</section>`;
+}
 
 /** A static HTML report built from the Journal alone. */
 export function buildReport(journal: JournalEvent[]): string {
@@ -44,7 +81,7 @@ export function buildReport(journal: JournalEvent[]): string {
 </tr>`;
     }).join("\n");
     const covers = (c.covers as string[]).join(", ") || "nothing";
-    return `<section>
+    return `<section id="${esc(caseAnchor(c.file))}">
 <h2>${badge(verdict)} ${esc(c.title)}</h2>
 <p><small>${esc(c.file)} · covers ${esc(covers)}${startsFrom}</small></p>
 ${skippedBecause}
@@ -66,6 +103,7 @@ code{font-size:11px}
 </style></head><body>
 <h1>Run ${esc(run.runId ?? "")}</h1>
 <p>${eventsNamed("judgment").length} judgments${t ? ` · pass ≥ ${t.pass}, fail ≤ ${t.fail}` : ""}</p>
+${criteriaSection(events)}
 ${cases}
 </body></html>
 `;

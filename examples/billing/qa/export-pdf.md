@@ -1,5 +1,4 @@
 ---
-covers: ["#2/export-pdf"]
 requires: [sign-in]
 ---
 # Export invoices as PDF (the example app lacks this, so it fails)

@@ -58,3 +58,27 @@ describe("buildReport with Setups", () => {
     expect(html).toMatch(/List invoices[\s\S]*starts from sign-in/);
   });
 });
+
+describe("buildReport with Acceptance Criteria", () => {
+  const html = buildReport([
+    { ts, event: "run.started", runId: "r3" },
+    { ts, event: "issue.read", repo: "acme/billing", issue: 7, title: "Invoices", url: "https://github.com/acme/billing/issues/7",
+      body: "## Acceptance criteria\n- [ ] [list] Invoices are listed\n- [ ] Totals look right" },
+    { ts, event: "case.started", file: "list.md", title: "List invoices", covers: ["#7/list", "#7/nope"], requires: [], steps: [] },
+    { ts, event: "case.verdict", file: "list.md", verdict: "Passed" },
+  ]);
+
+  it("has a row per Acceptance Criterion with its status and covering Test Cases", () => {
+    expect(html).toMatch(/<a href="https:\/\/github.com\/acme\/billing\/issues\/7">#7\/list<\/a>[\s\S]*Invoices are listed[\s\S]*Met[\s\S]*<a href="#case-list\.md">List invoices<\/a>/);
+    expect(html).toContain('id="case-list.md"');
+  });
+
+  it("flags untagged items and covers: entries that point at nothing", () => {
+    expect(html).toMatch(/Totals look right[\s\S]*Unverified[\s\S]*needs tag/);
+    expect(html).toContain("list.md covers #7/nope: #7 has no Acceptance Criterion tagged [nope]");
+  });
+
+  it("leaves the table out when no Test Case covers anything", () => {
+    expect(buildReport([{ ts, event: "run.started", runId: "r4" }])).not.toContain("Acceptance Criteria");
+  });
+});

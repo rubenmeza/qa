@@ -1,8 +1,11 @@
 #!/usr/bin/env -S node --import tsx
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { chromium } from "playwright";
+import { evaluateCriteria, readCoveredIssues, type IssueReader } from "./acceptance-criteria.ts";
+import { githubIssueReader, repoFromRemote } from "./github.ts";
 import { JEV_MODEL, jevJudge } from "./judge.ts";
 import { fileJournal, JOURNAL_FILE, type Journal, type JournalEvent } from "./journal.ts";
 import { buildReport, skipReason } from "./report.ts";
@@ -10,15 +13,17 @@ import { planRun, RunPlanError, runTestCases, type TestCaseVerdict } from "./run
 import { DEFAULT_OPTIONS, type Verdict } from "./run-test-case.ts";
 import { missingVariables, parseTestCase, variableNames, type TestData } from "./test-case.ts";
 
-const USAGE = `Usage: qa run <folder> [--out <dir>]
+const USAGE = `Usage: qa run <folder> [--out <dir>] [--repo <owner/name>]
 
 Runs every Test Case (*.md) in <folder> and writes the Journal and report.html
 to <out>/<run id>/ (default <folder>/../qa-runs).
 
 Test Data: <folder>/test-data.json; an environment variable of the same name wins.
-Needs TYPESAFE_API_KEY.`;
+Acceptance Criteria: \`covers: ["#123/tag"]\` reads issue 123 of --repo, else
+QA_GITHUB_REPO, else the GitHub \`origin\` of the git repo holding <folder>.
+Needs TYPESAFE_API_KEY; GITHUB_TOKEN for private repos and higher rate limits.`;
 
-const { positionals, values } = parseArgs({ allowPositionals: true, options: { out: { type: "string" } } });
+const { positionals, values } = parseArgs({ allowPositionals: true, options: { out: { type: "string" }, repo: { type: "string" } } });
 const [command, folderArg] = positionals;
 if (command !== "run" || !folderArg) {
   console.error(USAGE);
@@ -51,9 +56,11 @@ const runId = new Date().toISOString().replace(/[:.]/g, "-");
 const runDir = join(resolve(values.out ?? join(folder, "..", "qa-runs")), runId);
 const journal = printing(fileJournal(runDir));
 const judge = jevJudge();
+const repo = values.repo || process.env.QA_GITHUB_REPO || repoFromRemote(process.env.QA_GIT_REMOTE || gitRemote(folder));
 journal.record("run.started", {
-  runId, model: JEV_MODEL, thresholds: { pass: DEFAULT_OPTIONS.pass, fail: DEFAULT_OPTIONS.fail }, cases: files,
+  runId, model: JEV_MODEL, thresholds: { pass: DEFAULT_OPTIONS.pass, fail: DEFAULT_OPTIONS.fail }, cases: files, repo,
 });
+if (testCases.some((tc) => tc.covers.length)) await readCoveredIssues(testCases, issueReader(repo), journal);
 
 const browser = await chromium.launch();
 let verdicts: TestCaseVerdict[] = [];
@@ -66,8 +73,33 @@ try {
 
 const events: JournalEvent[] = readFileSync(join(runDir, JOURNAL_FILE), "utf8").trim().split("\n").map((l) => JSON.parse(l));
 writeFileSync(join(runDir, "report.html"), buildReport(events));
+printCriteria(events);
 console.log(`\nJournal: ${join(runDir, JOURNAL_FILE)}\nReport:  ${join(runDir, "report.html")}`);
 process.exit(verdicts.every((v) => v.verdict === "Passed") ? 0 : 1);
+
+function gitRemote(dir: string): string {
+  try {
+    return execFileSync("git", ["-C", dir, "remote", "get-url", "origin"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  } catch {
+    return "";
+  }
+}
+
+function issueReader(repo: string | undefined): IssueReader {
+  if (repo) return githubIssueReader(repo);
+  return { repo: "unknown", read: async () => { throw new Error("no GitHub repo: pass --repo owner/name or set QA_GITHUB_REPO"); } };
+}
+
+function printCriteria(events: JournalEvent[]) {
+  const { criteria, problems } = evaluateCriteria(events);
+  if (!criteria.length && !problems.length) return;
+  const count = (status: string) => criteria.filter((c) => c.status === status).length;
+  console.log(`\nAcceptance Criteria: ${count("Met")} Met, ${count("Unmet")} Unmet, ${count("Unverified")} Unverified`);
+  for (const c of criteria) {
+    if (c.status !== "Met") console.log(`  ${c.status}: #${c.issue}${c.tag ? `/${c.tag}` : ""} ${c.text}${c.warning ? ` (${c.warning})` : ""}`);
+  }
+  for (const p of problems) console.log(`  ${p.file} covers ${p.cover}: ${p.problem}`);
+}
 
 /** Prints each Test Case and Step as the Journal records it (values already redacted). */
 function printing(journal: Journal): Journal {
