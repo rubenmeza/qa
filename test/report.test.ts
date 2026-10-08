@@ -45,12 +45,12 @@ describe("buildReport with Setups", () => {
     { ts, event: "case.verdict", file: "qa/sign-in.md", verdict: "Failed" },
     { ts, event: "case.skipped", file: "qa/invoices.md", title: "List invoices", covers: ["#3/list"], requires: ["sign-in"],
       steps: [{ n: 1, kind: "expect", text: "invoices are listed" }] },
-    { ts, event: "case.verdict", file: "qa/invoices.md", verdict: "Skipped", setup: "sign-in", setupVerdict: "Failed" },
+    { ts, event: "case.verdict", file: "qa/invoices.md", verdict: "Skipped", setup: "sign-in", failedSetup: "sign-in", failedSetupVerdict: "Failed" },
   ]);
 
   it("shows a Skipped Test Case with its Steps and the Setup that caused it", () => {
     expect(html).toMatch(/Skipped[\s\S]*List invoices/);
-    expect(html).toContain("requires sign-in, which Failed");
+    expect(html).toContain("Skipped: Setup sign-in Failed");
     expect(html).toContain("invoices are listed");
   });
 

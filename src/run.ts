@@ -1,40 +1,43 @@
 import type { Browser, BrowserContextOptions } from "playwright";
-import type { Judge } from "./judge.ts";
-import type { Journal } from "./journal.ts";
-import { runTestCase, type Options, type Verdict } from "./runner.ts";
-import type { TestCase, TestData } from "./test-case.ts";
+import { runTestCase, type CaseDeps, type Verdict } from "./run-test-case.ts";
+import { caseSummary, type TestCase } from "./test-case.ts";
 
-type Deps = { browser: Browser; judge: Judge; testData: TestData; journal: Journal; options?: Partial<Options> };
+type RunDeps = Omit<CaseDeps, "page"> & { browser: Browser };
 
-export type CaseVerdictByName = { name: string; verdict: Verdict };
+export type TestCaseVerdict = { name: string; verdict: Verdict };
 
-type Session = NonNullable<BrowserContextOptions["storageState"]>;
+/** A Setup's cookies and local storage, as Playwright saves them. */
+type StorageState = NonNullable<BrowserContextOptions["storageState"]>;
 
 /**
  * Runs Test Cases in an order where each Setup comes before the Test Cases requiring it.
- * Each starts in a fresh browser context, loaded with its Setup's session when it has one.
+ * Each starts in a fresh browser context, loaded with its Setup's storage state when it
+ * has one. A Test Case whose Setup did not pass is Skipped, down the chain.
  */
-export async function runTestCases(testCases: TestCase[], deps: Deps): Promise<CaseVerdictByName[]> {
+export async function runTestCases(testCases: TestCase[], deps: RunDeps): Promise<TestCaseVerdict[]> {
   const ordered = planRun(testCases);
   const setups = new Set(testCases.flatMap((tc) => tc.requires));
-  const sessions = new Map<string, Session>();
-  const verdicts: CaseVerdictByName[] = [];
+  const storageStates = new Map<string, StorageState>();
+  /** For each Test Case that did not pass: the Setup that first failed upstream, or itself. */
+  const failedAt = new Map<string, { failedSetup: string; failedSetupVerdict: Verdict }>();
+  const verdicts: TestCaseVerdict[] = [];
 
   for (const tc of ordered) {
     const setup = tc.requires[0];
-    const setupVerdict = setup && verdicts.find((v) => v.name === setup)!.verdict;
-    if (setupVerdict && setupVerdict !== "Passed") {
-      const { file, title, covers, requires, steps } = tc;
-      deps.journal.record("case.skipped", { file, title, covers, requires, steps });
-      deps.journal.record("case.verdict", { file, verdict: "Skipped", setup, setupVerdict });
+    const cause = setup ? failedAt.get(setup) : undefined;
+    if (cause) {
+      deps.journal.record("case.skipped", caseSummary(tc));
+      deps.journal.record("case.verdict", { file: tc.file, verdict: "Skipped", setup, ...cause });
+      failedAt.set(tc.name, cause);
       verdicts.push({ name: tc.name, verdict: "Skipped" });
       continue;
     }
-    const context = await deps.browser.newContext(setup ? { storageState: sessions.get(setup) } : {});
+    const context = await deps.browser.newContext(setup ? { storageState: storageStates.get(setup) } : {});
     try {
       const { verdict } = await runTestCase(tc, { ...deps, page: await context.newPage() });
-      // The session holds credentials: kept in memory for this Run only, never journalled.
-      if (verdict === "Passed" && setups.has(tc.name)) sessions.set(tc.name, await context.storageState());
+      // Holds credentials: kept in memory for this Run only, never journalled.
+      if (verdict === "Passed" && setups.has(tc.name)) storageStates.set(tc.name, await context.storageState());
+      if (verdict !== "Passed") failedAt.set(tc.name, { failedSetup: tc.name, failedSetupVerdict: verdict });
       verdicts.push({ name: tc.name, verdict });
     } finally {
       await context.close();
@@ -64,7 +67,11 @@ export function planRun(testCases: TestCase[]): TestCase[] {
   const pending = [...testCases];
   while (pending.length) {
     const i = pending.findIndex((tc) => tc.requires.every((r) => ordered.some((o) => o.name === r)));
-    if (i === -1) throw new RunPlanError(`Setups require each other: ${pending.map((tc) => `${tc.name}.md`).join(", ")}`);
+    if (i === -1) {
+      // Left over: the cycle and whatever depends on it. Name only the Setups in it.
+      const stuck = pending.filter((tc) => pending.some((o) => o.requires.includes(tc.name)));
+      throw new RunPlanError(`Setups require each other: ${stuck.map((tc) => `${tc.name}.md`).join(", ")}`);
+    }
     ordered.push(...pending.splice(i, 1));
   }
   return ordered;

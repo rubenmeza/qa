@@ -1,11 +1,15 @@
 import type { JournalEvent } from "./journal.ts";
-import type { Verdict } from "./runner.ts";
+import type { Verdict } from "./run-test-case.ts";
 import { stepRef } from "./test-case.ts";
 
 const esc = (s: unknown) =>
   String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 const COLOR: Record<Verdict, string> = { Passed: "#1a7f37", Failed: "#cf222e", "Needs Review": "#9a6700", Skipped: "#6e7781" };
+/** Why a Test Case was Skipped, from its `case.verdict` event. */
+export const skipReason = (e: { failedSetup?: unknown; failedSetupVerdict?: unknown }) =>
+  `Setup ${e.failedSetup} ${e.failedSetupVerdict}`;
+
 const badge = (verdict?: Verdict) =>
   verdict ? `<b style="color:${COLOR[verdict]}">${esc(verdict)}</b>` : `<span style="color:#6e7781">not attempted</span>`;
 
@@ -13,7 +17,7 @@ type StepDef = { n: number; kind: string; text: string };
 
 /** A static HTML report built from the Journal alone. */
 export function buildReport(journal: JournalEvent[]): string {
-  // The Journal is read back as plain JSON; fields are as the runner wrote them.
+  // The Journal is read back as plain JSON; fields are as the Run wrote them.
   const events = journal as Array<Record<string, any>>;
   const eventsNamed = (name: string) => events.filter((e) => e.event === name);
   const run = eventsNamed("run.started")[0] ?? {};
@@ -22,8 +26,7 @@ export function buildReport(journal: JournalEvent[]): string {
   const cases = events.filter((e) => e.event === "case.started" || e.event === "case.skipped").map((c) => {
     const caseVerdict = eventsNamed("case.verdict").find((e) => e.file === c.file);
     const verdict = caseVerdict?.verdict;
-    const skippedBecause = verdict === "Skipped"
-      ? `<p>Skipped: requires ${esc(caseVerdict!.setup)}, which ${esc(caseVerdict!.setupVerdict)}</p>` : "";
+    const skippedBecause = verdict === "Skipped" ? `<p>Skipped: ${esc(skipReason(caseVerdict!))}</p>` : "";
     const startsFrom = c.requires?.length ? ` · starts from ${esc(c.requires.join(", "))}` : "";
     const rows = (c.steps as StepDef[]).map((s) => {
       const ref = stepRef(c.file, s.n);

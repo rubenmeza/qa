@@ -5,9 +5,9 @@ import { parseArgs } from "node:util";
 import { chromium } from "playwright";
 import { JEV_MODEL, jevJudge } from "./judge.ts";
 import { fileJournal, JOURNAL_FILE, type Journal, type JournalEvent } from "./journal.ts";
-import { buildReport } from "./report.ts";
-import { planRun, RunPlanError, runTestCases } from "./run.ts";
-import { DEFAULT_OPTIONS, type Verdict } from "./runner.ts";
+import { buildReport, skipReason } from "./report.ts";
+import { planRun, RunPlanError, runTestCases, type TestCaseVerdict } from "./run.ts";
+import { DEFAULT_OPTIONS, type Verdict } from "./run-test-case.ts";
 import { missingVariables, parseTestCase, variableNames, type TestData } from "./test-case.ts";
 
 const USAGE = `Usage: qa run <folder> [--out <dir>]
@@ -56,7 +56,7 @@ journal.record("run.started", {
 });
 
 const browser = await chromium.launch();
-let verdicts: { verdict: Verdict }[] = [];
+let verdicts: TestCaseVerdict[] = [];
 try {
   verdicts = await runTestCases(testCases, { browser, judge, testData, journal });
 } finally {
@@ -83,7 +83,7 @@ function printing(journal: Journal): Journal {
         console.log(`  ${ICON[data.verdict as Verdict]} ${stepText.get(data.step as string)}\n      ${data.verdict}: ${data.why}`);
       }
       if (event === "case.verdict") {
-        const because = data.setup ? `: requires ${data.setup}, which ${data.setupVerdict}` : "";
+        const because = data.verdict === "Skipped" ? `: ${skipReason(data)}` : "";
         console.log(`  = ${data.verdict}${because}`);
       }
     },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { JudgeUnavailableError } from "../src/judge.ts";
-import { runTestCase } from "../src/runner.ts";
+import { runTestCase } from "../src/run-test-case.ts";
 import { parseTestCase } from "../src/test-case.ts";
 import { byName, fakeJudge, memoryJournal, useBrowserPage, useFixtureServer } from "./helpers.ts";
 

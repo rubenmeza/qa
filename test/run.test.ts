@@ -59,8 +59,8 @@ describe("runTestCases", () => {
     ]);
     expect(journal.events.filter((e) => e.event === "case.started").map((e) => e.file)).toEqual(["qa/sign-in.md"]);
     expect(journal.events.filter((e) => e.event === "case.verdict" && e.verdict === "Skipped")).toMatchObject([
-      { file: "qa/invoices.md", setup: "sign-in", setupVerdict: "Failed" },
-      { file: "qa/export.md", setup: "invoices", setupVerdict: "Skipped" },
+      { file: "qa/invoices.md", setup: "sign-in", failedSetup: "sign-in", failedSetupVerdict: "Failed" },
+      { file: "qa/export.md", setup: "invoices", failedSetup: "sign-in", failedSetupVerdict: "Failed" },
     ]);
   });
 
@@ -77,8 +77,8 @@ describe("runTestCases", () => {
     },
     {
       why: "Setups that require each other",
-      cases: () => [greeted("a", "requires: [b]"), greeted("b", "requires: [a]")],
-      error: "Setups require each other: a.md, b.md",
+      cases: () => [greeted("a", "requires: [b]"), greeted("b", "requires: [a]"), greeted("c", "requires: [a]")],
+      error: /^Setups require each other: a\.md, b\.md$/,
     },
   ])("stops the Run before any browser work when a Test Case requires $why", async ({ cases, error }) => {
     const journal = memoryJournal();

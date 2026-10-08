@@ -7,7 +7,7 @@ export type TestData = Record<string, string>;
 
 /**
  * `name` is the file name without `.md`: how `requires:` refers to a Test Case.
- * `requires` names the Setup this Test Case starts from (at most one, checked when planning the Run).
+ * `requires` names the Setup this Test Case starts from (at most one, enforced when planning the Run).
  */
 export type TestCase = { file: string; name: string; title: string; covers: string[]; requires: string[]; steps: Step[] };
 
@@ -40,6 +40,9 @@ function parseList(frontMatter: string, key: string): string[] {
   const items = m[1].trim() ? m[1].trim().replace(/^\[|\]$/g, "").split(",") : m[2].split("\n").map((l) => l.replace(/^\s*-/, ""));
   return items.map((i) => i.trim().replace(/^["']|["']$/g, "")).filter(Boolean);
 }
+
+/** What the Journal records about a Test Case when it starts or is Skipped; the report reads both alike. */
+export const caseSummary = ({ file, title, covers, requires, steps }: TestCase) => ({ file, title, covers, requires, steps });
 
 /** `{file}#{n}`: how the Journal refers to a Step. */
 export const stepRef = (file: string, n: number) => `${file}#${n}`;
