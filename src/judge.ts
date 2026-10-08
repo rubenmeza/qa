@@ -21,7 +21,7 @@ export type JudgedChoice = { choice: string; p: number; record: JudgeRecord };
 /** `p` is the probability that the statement holds. */
 export type JudgedStatement = { p: number; record: JudgeRecord };
 
-/** The narrow questions the runner asks about a Step. Inputs are already free of Test Data values. */
+/** The narrow questions asked about a Step. Inputs are already free of Test Data values. */
 export interface Judge {
   /** Which of the core Actions the step describes; choice is an ActionKind. */
   actionKind(step: string): Promise<JudgedChoice>;

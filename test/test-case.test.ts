@@ -29,6 +29,14 @@ describe("parseTestCase", () => {
   });
 });
 
+describe("requires:", () => {
+  it("names the Test Case by its file and reads the Setup it requires", () => {
+    const tc = parseTestCase("qa/create-invoice.md", `---\nrequires: [sign-in-as-admin]\n---\n# Create an invoice\n`);
+    expect(tc).toMatchObject({ name: "create-invoice", requires: ["sign-in-as-admin"] });
+    expect(parseTestCase("x.md", "# X\n").requires).toEqual([]);
+  });
+});
+
 describe("covers:", () => {
   it.each([
     ['covers: ["#1/a", "#2/b"]'],

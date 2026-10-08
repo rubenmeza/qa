@@ -2,30 +2,41 @@
 <html lang="en">
 <head><meta charset="utf-8"><title>Acme Billing</title></head>
 <body>
-  <main id="app">
-    <h1>Acme Billing</h1>
-    <form id="login">
-      <label>Email <input name="email" type="email"></label>
-      <label>Password <input name="password" type="password"></label>
-      <button type="submit">Sign in</button>
-      <p id="error" role="alert"></p>
-    </form>
-  </main>
+  <main id="app"></main>
   <script>
-    document.getElementById("login").addEventListener("submit", (e) => {
-      e.preventDefault();
-      const f = new FormData(e.target);
-      // Client-side delay: renders after any "network idle + unchanged for 300 ms" settle.
-      setTimeout(() => {
-        if (f.get("email") === "ada@example.com" && f.get("password") === "hunter2") {
-          document.getElementById("app").innerHTML =
-            "<h1>Acme Billing</h1><p>Welcome back, Ada!</p><h2>Invoices</h2>" +
-            "<ul><li>INV-001 Globex</li><li>INV-002 Initech</li></ul><button>Sign out</button>";
-        } else {
-          document.getElementById("error").textContent = "Wrong email or password.";
-        }
-      }, 600);
-    });
+    // Keeps the signed-in user in localStorage, so a Setup's saved session carries it.
+    const app = document.getElementById("app");
+    function render() {
+      const user = localStorage.getItem("user");
+      if (user) {
+        app.innerHTML =
+          `<h1>Acme Billing</h1><p>Welcome back, ${user}!</p><h2>Invoices</h2>` +
+          `<ul><li>INV-001 Globex</li><li>INV-002 Initech</li></ul><button>Sign out</button>`;
+        app.querySelector("button").addEventListener("click", () => { localStorage.removeItem("user"); render(); });
+        return;
+      }
+      app.innerHTML = `<h1>Acme Billing</h1>
+        <form>
+          <label>Email <input name="email" type="email"></label>
+          <label>Password <input name="password" type="password"></label>
+          <button type="submit">Sign in</button>
+          <p role="alert"></p>
+        </form>`;
+      app.querySelector("form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const f = new FormData(e.target);
+        // Client-side delay: renders after a "network idle + unchanged for 300 ms" settle.
+        setTimeout(() => {
+          if (f.get("email") === "ada@example.com" && f.get("password") === "hunter2") {
+            localStorage.setItem("user", "Ada");
+            render();
+          } else {
+            app.querySelector("[role=alert]").textContent = "Wrong email or password.";
+          }
+        }, 600);
+      });
+    }
+    render();
   </script>
 </body>
 </html>

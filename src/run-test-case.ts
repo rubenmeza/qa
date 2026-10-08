@@ -2,9 +2,11 @@ import type { Page } from "playwright";
 import { JudgeUnavailableError, type ActionKind, type Judge, type JudgeRecord } from "./judge.ts";
 import type { Journal } from "./journal.ts";
 import { candidates, takeSnapshot } from "./page-snapshot.ts";
-import { resolveVariables, stepRef, variableNames, type Step, type TestCase, type TestData } from "./test-case.ts";
+import { caseSummary, resolveVariables, stepRef, variableNames, type Step, type TestCase, type TestData } from "./test-case.ts";
 
-export type Verdict = "Passed" | "Failed" | "Needs Review";
+export type Verdict = "Passed" | "Failed" | "Needs Review" | "Skipped";
+/** A Verdict reached by running: only a whole Test Case can be Skipped, by the Run. */
+export type JudgedVerdict = Exclude<Verdict, "Skipped">;
 
 export type Options = {
   /** Probability at or above which a judgment counts as yes. */
@@ -22,14 +24,15 @@ export type Options = {
 export const DEFAULT_OPTIONS: Options = { pass: 0.9, fail: 0.1, stepTimeoutMs: 5000, settleMs: 300, changeTimeoutMs: 2000 };
 
 /** A Step's Verdict and the reason for it. */
-export type StepVerdict = { n: number; verdict: Verdict; why: string };
-export type CaseVerdict = { verdict: Verdict; steps: StepVerdict[] };
+export type StepVerdict = { n: number; verdict: JudgedVerdict; why: string };
+export type CaseVerdict = { verdict: JudgedVerdict; steps: StepVerdict[] };
 type Judged = Omit<StepVerdict, "n">;
 
-type Deps = { page: Page; judge: Judge; testData: TestData; journal: Journal; options?: Partial<Options> };
+/** What running one Test Case needs. */
+export type CaseDeps = { page: Page; judge: Judge; testData: TestData; journal: Journal; options?: Partial<Options> };
 
 /** What a Step needs while it runs: the Test Case's page and judge, and the Step's ref. */
-type StepContext = Deps & { opts: Options; ref: string; redact: (text: string) => string };
+type StepContext = CaseDeps & { opts: Options; ref: string; redact: (text: string) => string };
 
 /** What each judgment is about, as recorded in the Journal. */
 type Purpose = "action-kind" | "element" | "expectation";
@@ -44,7 +47,7 @@ const VERBS: [RegExp, ActionKind][] = [
 ];
 
 /** Runs one Test Case in `page`, halting at the first Step that does not pass. */
-export async function runTestCase(testCase: TestCase, deps: Deps): Promise<CaseVerdict> {
+export async function runTestCase(testCase: TestCase, deps: CaseDeps): Promise<CaseVerdict> {
   const { page } = deps;
   const redact = redactor(testCase, deps.testData);
   const journal: Journal = {
@@ -52,7 +55,7 @@ export async function runTestCase(testCase: TestCase, deps: Deps): Promise<CaseV
     attach: deps.journal.attach,
   };
   const ctx: StepContext = { ...deps, journal, opts: { ...DEFAULT_OPTIONS, ...deps.options }, redact, ref: "" };
-  journal.record("case.started", { file: testCase.file, title: testCase.title, covers: testCase.covers, steps: testCase.steps });
+  journal.record("case.started", caseSummary(testCase));
 
   const steps: StepVerdict[] = [];
   for (const step of testCase.steps) {

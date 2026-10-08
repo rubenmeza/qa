@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Acme Billing</title></head>
+<body>
+  <main id="app"></main>
+  <script>
+    // Keeps the signed-in user in localStorage, so a saved browser session carries it.
+    const app = document.getElementById("app");
+    function render() {
+      const user = localStorage.getItem("user");
+      if (user) {
+        app.innerHTML = `<h1>Acme Billing</h1><p>Welcome back, ${user}!</p><h2>Invoices</h2><ul><li>INV-001 Globex</li></ul>`;
+        return;
+      }
+      app.innerHTML = `<h1>Acme Billing</h1><form><label>Email <input name="email" type="email"></label>
+        <label>Password <input name="password" type="password"></label><button type="submit">Sign in</button></form>`;
+      app.querySelector("form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const f = new FormData(e.target);
+        if (f.get("email") === "ada@example.com" && f.get("password") === "hunter2") localStorage.setItem("user", "Ada");
+        render();
+      });
+    }
+    render();
+  </script>
+</body>
+</html>

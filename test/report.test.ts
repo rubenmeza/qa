@@ -37,3 +37,24 @@ describe("buildReport", () => {
     expect(html).not.toContain("<script>alert(1)");
   });
 });
+
+describe("buildReport with Setups", () => {
+  const html = buildReport([
+    { ts, event: "run.started", runId: "r2" },
+    { ts, event: "case.started", file: "qa/sign-in.md", title: "Sign in", covers: [], requires: [], steps: [] },
+    { ts, event: "case.verdict", file: "qa/sign-in.md", verdict: "Failed" },
+    { ts, event: "case.skipped", file: "qa/invoices.md", title: "List invoices", covers: ["#3/list"], requires: ["sign-in"],
+      steps: [{ n: 1, kind: "expect", text: "invoices are listed" }] },
+    { ts, event: "case.verdict", file: "qa/invoices.md", verdict: "Skipped", setup: "sign-in", failedSetup: "sign-in", failedSetupVerdict: "Failed" },
+  ]);
+
+  it("shows a Skipped Test Case with its Steps and the Setup that caused it", () => {
+    expect(html).toMatch(/Skipped[\s\S]*List invoices/);
+    expect(html).toContain("Skipped: Setup sign-in Failed");
+    expect(html).toContain("invoices are listed");
+  });
+
+  it("shows which Setup a Test Case started from", () => {
+    expect(html).toMatch(/List invoices[\s\S]*starts from sign-in/);
+  });
+});
