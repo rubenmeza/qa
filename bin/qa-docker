@@ -3,14 +3,19 @@
 # Runs go to <folder>/../qa-runs. The container shares the host network, so the
 # Test Cases can open an Application Under Test on localhost.
 # Test Data comes from <folder>/test-data.json, or an env file: QA_ENV_FILE=.env.qa
+# Acceptance Criteria are read from the GitHub repo of the folder's git `origin`
+# (QA_GITHUB_REPO overrides), with GITHUB_TOKEN or else the `gh` CLI's token.
 set -eu
 folder=$(cd "${1:?usage: qa-docker <folder of Test Cases>}" && pwd)
 runs=$(dirname "$folder")/qa-runs
 root=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$runs"
+QA_GIT_REMOTE=$(git -C "$folder" remote get-url origin 2>/dev/null || true)
+GITHUB_TOKEN=${GITHUB_TOKEN:-$(gh auth token 2>/dev/null || true)}
+export QA_GIT_REMOTE GITHUB_TOKEN
 docker build -q -t qa "$root" >/dev/null
 set -- docker run --rm --init --ipc=host --network host \
-  -e TYPESAFE_API_KEY -e HOME=/tmp --user "$(id -u):$(id -g)" \
+  -e TYPESAFE_API_KEY -e GITHUB_TOKEN -e QA_GITHUB_REPO -e QA_GIT_REMOTE -e HOME=/tmp --user "$(id -u):$(id -g)" \
   -v "$folder:/work/qa:ro" -v "$runs:/work/qa-runs"
 if [ -n "${QA_ENV_FILE:-}" ]; then set -- "$@" --env-file "$QA_ENV_FILE"; fi
 status=0

@@ -12,6 +12,10 @@ export interface Journal {
 
 export const JOURNAL_FILE = "journal.jsonl";
 
+/** The Test Cases of a Run as journalled, in order: the ones that started and the ones Skipped. */
+export const casesIn = (events: Array<Record<string, any>>) =>
+  events.filter((e) => e.event === "case.started" || e.event === "case.skipped");
+
 export function fileJournal(runDir: string): Journal {
   mkdirSync(runDir, { recursive: true });
   return {

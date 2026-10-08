@@ -1,6 +1,3 @@
----
-covers: ["#1/wrong-password"]
----
 # Wrong password is rejected
 
 - do: open "http://localhost:4173/"

@@ -15,7 +15,14 @@ The container shares the host network, so Test Cases can open `http://localhost:
 Each Run writes `qa-runs/<run id>/` next to the folder: `journal.jsonl`, `shots/` and
 `report.html`. Exit code 0 means every Test Case Passed.
 
-Try it on the example app:
+With `covers: ["#123/tag"]`, a Run reads issue 123 from the GitHub repo of the folder's
+git `origin` (or `QA_GITHUB_REPO`) and reports each tagged item under its
+`## Acceptance criteria` heading as Met, Unmet or Unverified (see
+[ADR 0002](docs/adr/0002-acceptance-criteria-from-github-checklists.md)). It only reads;
+`qa-docker` uses `GITHUB_TOKEN`, else the `gh` CLI's token.
+
+Try it on the example app. Its `sign-in.md` covers this repo's own #1 criteria, since
+running it exercises them:
 
 ```sh
 python3 -m http.server 4173 -d examples/billing/app &

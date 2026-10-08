@@ -1,5 +1,5 @@
 ---
-covers: ["#1/sign-in"]
+covers: ["#1/core-actions", "#1/jev-target", "#1/jev-expectation"]
 ---
 # Sign in with valid credentials
 
