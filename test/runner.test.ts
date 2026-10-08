@@ -18,30 +18,30 @@ ${extra}`);
 describe("runTestCase", () => {
   it("Passes a Test Case whose page renders after a client-side delay", async () => {
     const judge = fakeJudge({
-      target: byName,
+      element: byName,
       expectation: (_, snap) => (snap.includes("Welcome back") ? 0.99 : 0.02),
     });
-    const result = await runTestCase(signIn("- expect: the user is greeted by name"), {
+    const caseVerdict = await runTestCase(signIn("- expect: the user is greeted by name"), {
       page: browser.page, judge, testData, journal: memoryJournal(),
     });
-    expect(result.steps.map((s) => s.verdict)).toEqual(["Passed", "Passed", "Passed", "Passed", "Passed"]);
-    expect(result.verdict).toBe("Passed");
+    expect(caseVerdict.steps.map((s) => s.verdict)).toEqual(["Passed", "Passed", "Passed", "Passed", "Passed"]);
+    expect(caseVerdict.verdict).toBe("Passed");
   });
 
   it("does not Pass an Expectation that was only true before the Action took effect", async () => {
     const judge = fakeJudge({
-      target: byName,
+      element: byName,
       expectation: (_, snap) => (snap.includes("INV-") ? 0.02 : 0.99),
     });
-    const result = await runTestCase(signIn("- expect: no invoices are shown"), {
+    const caseVerdict = await runTestCase(signIn("- expect: no invoices are shown"), {
       page: browser.page, judge, testData, journal: memoryJournal(), options: { stepTimeoutMs: 1500 },
     });
-    expect(result.steps.at(-1)).toMatchObject({ n: 5, verdict: "Failed" });
+    expect(caseVerdict.steps.at(-1)).toMatchObject({ n: 5, verdict: "Failed" });
   });
 
   it("never shows Test Data values to the judge or the Journal", async () => {
     const judge = fakeJudge({
-      target: byName,
+      element: byName,
       expectation: (_, snap) => (snap.includes("Welcome back") ? 0.99 : 0.02),
     });
     const journal = memoryJournal();
@@ -56,11 +56,11 @@ describe("runTestCase", () => {
 
   it("gives Needs Review, not Failed, when the judge is unavailable", async () => {
     const judge = fakeJudge({
-      target: () => { throw new JudgeUnavailableError("Jev: 503 Service Unavailable"); },
+      element: () => { throw new JudgeUnavailableError("Jev: 503 Service Unavailable"); },
     });
-    const result = await runTestCase(signIn(""), { page: browser.page, judge, testData, journal: memoryJournal() });
-    expect(result.verdict).toBe("Needs Review");
-    expect(result.steps.at(-1)).toMatchObject({ n: 2, verdict: "Needs Review", why: expect.stringContaining("503") });
+    const caseVerdict = await runTestCase(signIn(""), { page: browser.page, judge, testData, journal: memoryJournal() });
+    expect(caseVerdict.verdict).toBe("Needs Review");
+    expect(caseVerdict.steps.at(-1)).toMatchObject({ n: 2, verdict: "Needs Review", why: expect.stringContaining("503") });
   });
 
   it.each([
@@ -68,20 +68,20 @@ describe("runTestCase", () => {
     { answer: { choice: "none", p: 0.6 }, verdict: "Needs Review" },
     { answer: { choice: "e0", p: 0.6 }, verdict: "Needs Review" },
   ])("gives $verdict when the judge answers $answer.choice at p=$answer.p, and halts", async ({ answer, verdict }) => {
-    const judge = fakeJudge({ target: () => answer });
+    const judge = fakeJudge({ element: () => answer });
     const journal = memoryJournal();
-    const result = await runTestCase(signIn("- expect: the user is greeted by name"), {
+    const caseVerdict = await runTestCase(signIn("- expect: the user is greeted by name"), {
       page: browser.page, judge, testData, journal,
     });
-    expect(result).toMatchObject({ verdict, steps: [{ n: 1, verdict: "Passed" }, { n: 2, verdict }] });
+    expect(caseVerdict).toMatchObject({ verdict, steps: [{ n: 1, verdict: "Passed" }, { n: 2, verdict }] });
     expect(journal.events.filter((e) => e.event === "step.started")).toHaveLength(2);
   });
 
   it("gives Needs Review when an Expectation stays between the thresholds", async () => {
     const judge = fakeJudge({ expectation: () => 0.5 });
     const tc = parseTestCase("qa/x.md", `# X\n- do: open "${server.url}/billing"\n- expect: the page looks finished`);
-    const result = await runTestCase(tc, { page: browser.page, judge, testData, journal: memoryJournal(), options: { stepTimeoutMs: 500 } });
-    expect(result.steps.at(-1)).toMatchObject({ n: 2, verdict: "Needs Review" });
+    const caseVerdict = await runTestCase(tc, { page: browser.page, judge, testData, journal: memoryJournal(), options: { stepTimeoutMs: 500 } });
+    expect(caseVerdict.steps.at(-1)).toMatchObject({ n: 2, verdict: "Needs Review" });
   });
 
   it("runs every core Action, asking the judge for the kind only when the verb is unknown", async () => {
@@ -90,7 +90,7 @@ describe("runTestCase", () => {
       "the newsletter box is ticked": 'checkbox "Newsletter" [checked]',
     };
     const judge = fakeJudge({
-      target: byName,
+      element: byName,
       actionKind: () => ({ choice: "click", p: 0.95 }),
       expectation: (statement, snap) => (snap.includes(shows[statement]) ? 0.99 : 0.02),
     });
@@ -104,14 +104,14 @@ describe("runTestCase", () => {
 - do: tick the newsletter checkbox
 - expect: the newsletter box is ticked`);
     const journal = memoryJournal();
-    const result = await runTestCase(tc, { page: browser.page, judge, testData, journal });
-    expect(result.steps.filter((s) => s.verdict !== "Passed")).toEqual([]);
-    expect(result.steps).toHaveLength(8);
+    const caseVerdict = await runTestCase(tc, { page: browser.page, judge, testData, journal });
+    expect(caseVerdict.steps.filter((s) => s.verdict !== "Passed")).toEqual([]);
+    expect(caseVerdict.steps).toHaveLength(8);
     expect(journal.events.filter((e) => e.purpose === "action-kind").map((e) => e.step)).toEqual(["qa/shop.md#7"]);
   });
 
   it("journals every Step with its judgments and a screenshot as Evidence", async () => {
-    const judge = fakeJudge({ target: byName, expectation: (_, snap) => (snap.includes("Welcome back") ? 0.99 : 0.02) });
+    const judge = fakeJudge({ element: byName, expectation: (_, snap) => (snap.includes("Welcome back") ? 0.99 : 0.02) });
     const journal = memoryJournal();
     await runTestCase(signIn("- expect: the user is greeted by name"), { page: browser.page, judge, testData, journal });
 
@@ -123,8 +123,39 @@ describe("runTestCase", () => {
       "case.verdict",
     ]);
     const judgment = journal.events.find((e) => e.event === "judgment")!;
-    expect(judgment).toMatchObject({ step: "qa/sign-in.md#2", purpose: "action-target", model: "fake" });
+    expect(judgment).toMatchObject({ step: "qa/sign-in.md#2", purpose: "element", model: "fake" });
     const verdicts = journal.events.filter((e) => e.event === "step.verdict");
     for (const v of verdicts) expect(journal.attachments.has((v.evidence as { screenshot: string }).screenshot)).toBe(true);
+  });
+
+  it("shows the judge quoted Literals verbatim and Variables only by name", async () => {
+    const judge = fakeJudge({ element: byName, expectation: () => 0.99 });
+    const tc = parseTestCase("qa/x.md", `# X
+- do: open "${server.url}/billing"
+- do: type "{{password}}" into the password field
+- do: click "Sign in"`);
+    await runTestCase(tc, { page: browser.page, judge, testData, journal: memoryJournal() });
+    const steps = judge.seen.map((s) => (s as { step?: string }).step);
+    expect(steps).toEqual(['type "{{password}}" into the password field', 'click "Sign in"']);
+  });
+
+  it("journals a judgment that could not be answered", async () => {
+    const judge = fakeJudge({ element: () => { throw new JudgeUnavailableError("Jev: 503 Service Unavailable"); } });
+    const journal = memoryJournal();
+    await runTestCase(signIn(""), { page: browser.page, judge, testData, journal });
+    expect(journal.events.find((e) => e.event === "judgment.failed")).toMatchObject({
+      step: "qa/sign-in.md#2", purpose: "element", error: expect.stringContaining("503"),
+    });
+  });
+
+  it("keeps the Page Snapshot as Evidence for every Step, Actions included", async () => {
+    const judge = fakeJudge({ element: byName, expectation: (_, snap) => (snap.includes("Welcome back") ? 0.99 : 0.02) });
+    const journal = memoryJournal();
+    await runTestCase(signIn("- expect: the user is greeted by name"), { page: browser.page, judge, testData, journal });
+    const evidence = journal.events.filter((e) => e.event === "step.verdict").map((e) => e.evidence as { pageSnapshot: string });
+    expect(evidence).toHaveLength(5);
+    expect(evidence[0].pageSnapshot).toContain('button "Sign in"');
+    expect(evidence[2].pageSnapshot).toContain('textbox "Password": {{password}}');
+    expect(evidence[4].pageSnapshot).toContain("Welcome back, Ada!");
   });
 });

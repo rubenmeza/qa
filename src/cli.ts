@@ -7,7 +7,7 @@ import { JEV_MODEL, jevJudge } from "./judge.ts";
 import { fileJournal, JOURNAL_FILE, type JournalEvent } from "./journal.ts";
 import { buildReport } from "./report.ts";
 import { DEFAULT_OPTIONS, runTestCase, type Verdict } from "./runner.ts";
-import { missingVariables, parseTestCase, type TestData } from "./test-case.ts";
+import { missingVariables, parseTestCase, variableNames, type TestData } from "./test-case.ts";
 
 const USAGE = `Usage: qa run <folder> [--out <dir>]
 
@@ -35,7 +35,7 @@ const dataFile = join(folder, "test-data.json");
 const fileData: TestData = existsSync(dataFile) ? JSON.parse(readFileSync(dataFile, "utf8")) : {};
 const testData: TestData = { ...fileData };
 for (const tc of testCases) {
-  for (const name of missingVariables(tc, {})) if (process.env[name] !== undefined) testData[name] = process.env[name]!;
+  for (const name of variableNames(tc)) if (process.env[name] !== undefined) testData[name] = process.env[name]!;
 }
 const missing = testCases.flatMap((tc) => missingVariables(tc, testData).map((v) => `{{${v}}} in ${tc.file}`));
 if (missing.length) fail(`No Test Data for ${missing.join(", ")}.\nAdd it to ${dataFile} or set an environment variable of that name.`);
@@ -55,11 +55,11 @@ try {
   for (const tc of testCases) {
     console.log(`\n▶ ${tc.title}  (${tc.file})`);
     const context = await browser.newContext(); // fresh per Test Case
-    const result = await runTestCase(tc, { page: await context.newPage(), judge, testData, journal });
+    const caseVerdict = await runTestCase(tc, { page: await context.newPage(), judge, testData, journal });
     await context.close();
-    for (const s of result.steps) console.log(`  ${ICON[s.verdict]} ${tc.steps[s.n - 1].text}\n      ${s.verdict}: ${s.why}`);
-    console.log(`  = ${result.verdict}`);
-    verdicts.push(result.verdict);
+    for (const s of caseVerdict.steps) console.log(`  ${ICON[s.verdict]} ${tc.steps[s.n - 1].text}\n      ${s.verdict}: ${s.why}`);
+    console.log(`  = ${caseVerdict.verdict}`);
+    verdicts.push(caseVerdict.verdict);
   }
 } finally {
   await browser.close();

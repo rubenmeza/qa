@@ -53,7 +53,7 @@ type Answer = { choice: string; p: number };
  * receives is kept in `seen` so tests can check what the judge was shown.
  */
 export function fakeJudge(script: {
-  target?: (step: string, candidates: Candidate[], pageSnapshot: string) => Answer;
+  element?: (step: string, candidates: Candidate[], pageSnapshot: string) => Answer;
   expectation?: (statement: string, pageSnapshot: string) => number;
   actionKind?: (step: string) => Answer;
 }) {
@@ -64,9 +64,9 @@ export function fakeJudge(script: {
       const a = script.actionKind!(step);
       return { ...a, record: record({ step }, a) };
     },
-    async target(step, pageSnapshot, candidates) {
+    async element(step, pageSnapshot, candidates) {
       seen.push({ step, pageSnapshot, candidates });
-      const a = script.target!(step, candidates, pageSnapshot);
+      const a = script.element!(step, candidates, pageSnapshot);
       return { ...a, record: record({ step, pageSnapshot }, a) };
     },
     async expectation(statement, page) {

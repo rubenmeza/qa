@@ -8,9 +8,10 @@ const events = [
     steps: [{ n: 1, kind: "expect", text: "an Export PDF button is shown" }, { n: 2, kind: "do", text: "click Export PDF" }] },
   { ts, event: "step.started", step: "qa/export.md#1" },
   { ts, event: "judgment", step: "qa/export.md#1", purpose: "expectation", model: "jev-1.13.0", ms: 180,
-    request: { state: { page_snapshot: '- heading "Invoices <script>alert(1)</script>"' } }, response: { answers: { q: { noul: 0.02 } } } },
+    request: {}, response: { answers: { q: { noul: 0.02 } } } },
   { ts, event: "step.verdict", step: "qa/export.md#1", verdict: "Failed", why: "p=0.02",
-    evidence: { screenshot: "shots/qa_export_md-1.png", url: "http://localhost/" } },
+    evidence: { screenshot: "shots/qa_export_md-1.png", url: "http://localhost/",
+      pageSnapshot: '- heading "Invoices <script>alert(1)</script>"' } },
   { ts, event: "case.verdict", file: "qa/export.md", verdict: "Failed" },
   { ts, event: "run.finished", runId: "r1" },
 ];
@@ -24,11 +25,11 @@ describe("buildReport", () => {
     expect(html).toMatch(/Failed[\s\S]*an Export PDF button is shown[\s\S]*p=0\.02/);
   });
 
-  it("shows Steps after a halt as not run", () => {
-    expect(html).toMatch(/click Export PDF[\s\S]*Not run/);
+  it("shows Steps after a halt as not attempted", () => {
+    expect(html).toMatch(/click Export PDF[\s\S]*not attempted/);
   });
 
-  it("shows each judgment, the Page Snapshot it saw, and the screenshot", () => {
+  it("shows each judgment and the Evidence: Page Snapshot and screenshot", () => {
     expect(html).toContain("jev-1.13.0");
     expect(html).toContain("&quot;noul&quot;:0.02");
     expect(html).toContain('<img src="shots/qa_export_md-1.png"');

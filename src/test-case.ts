@@ -9,7 +9,6 @@ export type TestCase = { file: string; title: string; covers: string[]; steps: S
 
 export function parseTestCase(file: string, markdown: string): TestCase {
   const frontMatter = markdown.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
-  const covers = frontMatter.match(/^covers:\s*(\[.*\])\s*$/m)?.[1];
   const steps: Step[] = [];
   for (const line of markdown.split("\n")) {
     const m = line.match(/^- (do|expect):\s*(.+?)\s*$/);
@@ -23,16 +22,31 @@ export function parseTestCase(file: string, markdown: string): TestCase {
   return {
     file,
     title: markdown.match(/^# (.+?)\s*$/m)?.[1] ?? file,
-    covers: covers ? JSON.parse(covers) : [],
+    covers: parseCovers(frontMatter),
     steps,
   };
 }
 
+/** `covers:` as an inline list (`[#1/a, "#2/b"]`) or a YAML block list. */
+function parseCovers(frontMatter: string): string[] {
+  const m = frontMatter.match(/^covers:[ \t]*(.*)\n?((?:[ \t]+-.*\n?)*)/m);
+  if (!m) return [];
+  const items = m[1].trim() ? m[1].trim().replace(/^\[|\]$/g, "").split(",") : m[2].split("\n").map((l) => l.replace(/^\s*-/, ""));
+  return items.map((i) => i.trim().replace(/^["']|["']$/g, "")).filter(Boolean);
+}
+
+/** `{file}#{n}`: how the Journal refers to a Step. */
+export const stepRef = (file: string, n: number) => `${file}#${n}`;
+
 const VARIABLE = /\{\{(\w+)\}\}/g;
 
+/** Names of the Variables a Test Case uses, in order of first use. */
+export function variableNames(testCase: TestCase): string[] {
+  return [...new Set(testCase.steps.flatMap((s) => [...s.text.matchAll(VARIABLE)].map((m) => m[1])))];
+}
+
 export function missingVariables(testCase: TestCase, testData: TestData): string[] {
-  const names = testCase.steps.flatMap((s) => [...s.text.matchAll(VARIABLE)].map((m) => m[1]));
-  return [...new Set(names)].filter((name) => !(name in testData));
+  return variableNames(testCase).filter((name) => !(name in testData));
 }
 
 export function resolveVariables(text: string, testData: TestData): string {

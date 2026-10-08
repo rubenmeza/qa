@@ -1,8 +1,16 @@
 import { choice, noul, TypeSafeClient, TypeSafeError } from "@typesafe-ai/sdk";
 import type { Candidate } from "./page-snapshot.ts";
 
-export const ACTION_KINDS = ["open", "click", "type", "select", "press", "wait"] as const;
-export type ActionKind = (typeof ACTION_KINDS)[number];
+/** The core Actions, described for the judge. */
+const ACTION_KINDS = {
+  open: "Open or navigate to a URL",
+  click: "Click or tap an element",
+  type: "Type text into a field",
+  select: "Pick an option from a dropdown",
+  press: "Press a keyboard key",
+  wait: "Wait until some text appears",
+};
+export type ActionKind = keyof typeof ACTION_KINDS;
 
 /** What was asked and answered, kept in the Journal. */
 export type JudgeRecord = { model: string; request: unknown; response: unknown; ms: number };
@@ -17,8 +25,8 @@ export type JudgedStatement = { p: number; record: JudgeRecord };
 export interface Judge {
   /** Which of the core Actions the step describes; choice is an ActionKind. */
   actionKind(step: string): Promise<JudgedChoice>;
-  /** Which candidate the step acts on; choice is a candidate id or "none". */
-  target(step: string, pageSnapshot: string, candidates: Candidate[]): Promise<JudgedChoice>;
+  /** Which element the step acts on; choice is a candidate id or "none". */
+  element(step: string, pageSnapshot: string, candidates: Candidate[]): Promise<JudgedChoice>;
   expectation(statement: string, page: { url: string; pageSnapshot: string }): Promise<JudgedStatement>;
 }
 
@@ -33,6 +41,7 @@ export function jevJudge(client = new TypeSafeClient({ defaultModel: JEV_MODEL }
     try {
       const res = await client.systemOne({ state: state as never, questions });
       const answers = res.answers as Record<string, any>;
+      if (!answers?.q) throw new JudgeUnavailableError(`Jev: answer missing from response`);
       return { answers, record: { model: res.model, request: { state, questions }, response: { answers, usage: res.usage }, ms: Date.now() - t0 } };
     } catch (e) {
       if (e instanceof TypeSafeError) throw new JudgeUnavailableError(`Jev: ${e.message}`);
@@ -40,25 +49,21 @@ export function jevJudge(client = new TypeSafeClient({ defaultModel: JEV_MODEL }
     }
   }
   const picked = ({ answers, record }: Awaited<ReturnType<typeof ask>>): JudgedChoice => {
-    const a = answers.q;
-    return { choice: a.choice, p: a.probabilities[a.choice], record };
+    const { choice, probabilities } = answers.q;
+    const p = probabilities?.[choice];
+    if (typeof p !== "number") throw new JudgeUnavailableError(`Jev: malformed Choice answer`);
+    return { choice, p, record };
   };
 
   return {
     async actionKind(step) {
       return picked(await ask({ step }, {
-        q: choice("Which kind of browser action does `step` describe?", {
-          open: "Open or navigate to a URL",
-          click: "Click or tap an element",
-          type: "Type text into a field",
-          select: "Pick an option from a dropdown",
-          press: "Press a keyboard key",
-          wait: "Wait until some text appears",
-        }),
+        q: choice("Which kind of browser action does `step` describe?", ACTION_KINDS),
       }));
     },
-    async target(step, pageSnapshot, candidates) {
-      const criteria: Record<string, string> = Object.fromEntries(candidates.map((c) => [c.id, c.label]));
+    async element(step, pageSnapshot, candidates) {
+      // A Choice takes at most 255 options; "none" is one of them.
+      const criteria: Record<string, string> = Object.fromEntries(candidates.slice(0, 254).map((c) => [c.id, c.label]));
       criteria.none = "No element on the page matches what the step describes";
       return picked(await ask({ step, page_snapshot: pageSnapshot }, {
         q: choice("Which element in `page_snapshot` does `step` act on?", criteria),
@@ -71,6 +76,7 @@ export function jevJudge(client = new TypeSafeClient({ defaultModel: JEV_MODEL }
           false: "The page snapshot shows the statement is false, or shows nothing that makes it true",
         }),
       });
+      if (typeof answers.q.noul !== "number") throw new JudgeUnavailableError(`Jev: malformed Noul answer`);
       return { p: answers.q.noul, record };
     },
   };

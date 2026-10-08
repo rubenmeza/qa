@@ -29,6 +29,16 @@ describe("parseTestCase", () => {
   });
 });
 
+describe("covers:", () => {
+  it.each([
+    ['covers: ["#1/a", "#2/b"]'],
+    ["covers: [#1/a, #2/b]"],
+    ["covers:\n  - \"#1/a\"\n  - #2/b"],
+  ])("reads %j", (line) => {
+    expect(parseTestCase("x.md", `---\n${line}\n---\n# X\n`).covers).toEqual(["#1/a", "#2/b"]);
+  });
+});
+
 describe("Variables", () => {
   const tc = parseTestCase("qa/x.md", `# X
 - do: type "{{email}}" into the email field

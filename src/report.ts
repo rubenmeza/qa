@@ -1,10 +1,13 @@
 import type { JournalEvent } from "./journal.ts";
+import type { Verdict } from "./runner.ts";
+import { stepRef } from "./test-case.ts";
 
 const esc = (s: unknown) =>
   String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-const COLOR: Record<string, string> = { Passed: "#1a7f37", Failed: "#cf222e", "Needs Review": "#9a6700", "Not run": "#6e7781" };
-const badge = (verdict: string) => `<b style="color:${COLOR[verdict] ?? "inherit"}">${esc(verdict)}</b>`;
+const COLOR: Record<Verdict, string> = { Passed: "#1a7f37", Failed: "#cf222e", "Needs Review": "#9a6700" };
+const badge = (verdict?: Verdict) =>
+  verdict ? `<b style="color:${COLOR[verdict]}">${esc(verdict)}</b>` : `<span style="color:#6e7781">not attempted</span>`;
 
 type StepDef = { n: number; kind: string; text: string };
 
@@ -12,21 +15,21 @@ type StepDef = { n: number; kind: string; text: string };
 export function buildReport(journal: JournalEvent[]): string {
   // The Journal is read back as plain JSON; fields are as the runner wrote them.
   const events = journal as Array<Record<string, any>>;
-  const of = (name: string) => events.filter((e) => e.event === name);
-  const run = of("run.started")[0] ?? {};
+  const eventsNamed = (name: string) => events.filter((e) => e.event === name);
+  const run = eventsNamed("run.started")[0] ?? {};
 
-  const cases = of("case.started").map((c) => {
-    const verdict = of("case.verdict").find((e) => e.file === c.file)?.verdict ?? "Not run";
+  const cases = eventsNamed("case.started").map((c) => {
+    const verdict = eventsNamed("case.verdict").find((e) => e.file === c.file)?.verdict;
     const rows = (c.steps as StepDef[]).map((s) => {
-      const ref = `${c.file}#${s.n}`;
-      const v = of("step.verdict").find((e) => e.step === ref);
-      const judgments = of("judgment").filter((e) => e.step === ref);
-      const snapshot = judgments.at(-1)?.request?.state?.page_snapshot ?? judgments.at(-1)?.request?.pageSnapshot;
+      const ref = stepRef(c.file, s.n);
+      const v = eventsNamed("step.verdict").find((e) => e.step === ref);
+      const judgments = eventsNamed("judgment").filter((e) => e.step === ref);
+      const snapshot: string | undefined = v?.evidence?.pageSnapshot;
       const shot: string | undefined = v?.evidence?.screenshot;
       return `<tr>
   <td>${s.n}</td>
   <td><code>${esc(s.kind)}:</code> ${esc(s.text)}</td>
-  <td>${badge(v?.verdict ?? "Not run")}<br><small>${esc(v?.why ?? "")}</small></td>
+  <td>${badge(v?.verdict)}<br><small>${esc(v?.why ?? "")}</small></td>
   <td><small>${judgments.map((j) => `${esc(j.purpose)} · ${esc(j.model)} · ${j.ms} ms<br><code>${esc(JSON.stringify(j.response?.answers ?? j.response))}</code>`).join("<hr>")}</small>
     ${snapshot ? `<details><summary>Page Snapshot</summary><pre>${esc(snapshot)}</pre></details>` : ""}</td>
   <td>${shot ? `<a href="${esc(shot)}"><img src="${esc(shot)}" width="240" alt="Step ${s.n}"></a>` : ""}</td>
@@ -53,7 +56,7 @@ pre{white-space:pre-wrap;font-size:11px;max-height:300px;overflow:auto;backgroun
 code{font-size:11px}
 </style></head><body>
 <h1>Run ${esc(run.runId ?? "")}</h1>
-<p>${of("judgment").length} judgments${t ? ` · pass ≥ ${t.pass}, fail ≤ ${t.fail}` : ""}</p>
+<p>${eventsNamed("judgment").length} judgments${t ? ` · pass ≥ ${t.pass}, fail ≤ ${t.fail}` : ""}</p>
 ${cases}
 </body></html>
 `;

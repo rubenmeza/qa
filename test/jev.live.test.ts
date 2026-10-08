@@ -12,7 +12,7 @@ describe.skipIf(!process.env.TYPESAFE_API_KEY)("Jev judge (live)", () => {
   - button "Sign in"`;
 
   it("picks the element a Step acts on", async () => {
-    const t = await judge().target("type the given value into the password field", pageSnapshot, candidates(pageSnapshot));
+    const t = await judge().element("type the given value into the password field", pageSnapshot, candidates(pageSnapshot));
     expect(t.choice).toBe("e1");
     expect(t.p).toBeGreaterThanOrEqual(0.9);
   });
