@@ -33,4 +33,21 @@ and probability, then writes `runs/<run>/journal.jsonl`, `shots/` and `report.ht
 
 ## Verdict
 
-_Pending a live run with a real key._
+**Yes, the approach works.** Live run 2026-10-08 (`jev-1.13.0`) gave the Verdicts we expected:
+sign-in Passed, wrong-password Passed, export-pdf Failed at the right Step (p=0.02).
+
+- **Action targets:** all 9 picks correct, p ≥ 0.99, including the short "click sign in".
+- **Expectations:** clear calls (0.98–0.99 or 0.02). 19 judgments, 150–480 ms each,
+  ~420–550 input tokens each, ~9k tokens for the whole Run.
+- **Settling alone is not enough.** "Network idle + snapshot unchanged 300 ms" returned
+  before the app's 600 ms client-side delay, so 3 Expectations were first judged against
+  the old page (p 0.02–0.27) and only Passed on the re-judge after the page changed.
+  The re-judge-on-change loop (design.md #8) carries the load. Risk: an Expectation that
+  is *also true of the old page* (e.g. "no invoices are shown") can Pass before the
+  Action takes effect.
+- **Negative statements score lower.** "no invoices are shown" got 0.91, just over the
+  0.9 pass threshold, while positive statements got 0.98–0.99.
+- **The Journal is enough.** `report.ts` builds the report from `journal.jsonl` alone.
+
+Not tested here: Escalation, `expect-visual:`, Setup, a large real-app snapshot (Jev
+accuracy drops as state grows), ambiguous targets (several similar buttons).
