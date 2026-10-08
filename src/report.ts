@@ -5,7 +5,7 @@ import { stepRef } from "./test-case.ts";
 const esc = (s: unknown) =>
   String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-const COLOR: Record<Verdict, string> = { Passed: "#1a7f37", Failed: "#cf222e", "Needs Review": "#9a6700" };
+const COLOR: Record<Verdict, string> = { Passed: "#1a7f37", Failed: "#cf222e", "Needs Review": "#9a6700", Skipped: "#6e7781" };
 const badge = (verdict?: Verdict) =>
   verdict ? `<b style="color:${COLOR[verdict]}">${esc(verdict)}</b>` : `<span style="color:#6e7781">not attempted</span>`;
 
@@ -18,8 +18,13 @@ export function buildReport(journal: JournalEvent[]): string {
   const eventsNamed = (name: string) => events.filter((e) => e.event === name);
   const run = eventsNamed("run.started")[0] ?? {};
 
-  const cases = eventsNamed("case.started").map((c) => {
-    const verdict = eventsNamed("case.verdict").find((e) => e.file === c.file)?.verdict;
+  // Test Cases in Journal order: the ones that ran, and the ones Skipped because of their Setup.
+  const cases = events.filter((e) => e.event === "case.started" || e.event === "case.skipped").map((c) => {
+    const caseVerdict = eventsNamed("case.verdict").find((e) => e.file === c.file);
+    const verdict = caseVerdict?.verdict;
+    const skippedBecause = verdict === "Skipped"
+      ? `<p>Skipped: requires ${esc(caseVerdict!.setup)}, which ${esc(caseVerdict!.setupVerdict)}</p>` : "";
+    const startsFrom = c.requires?.length ? ` · starts from ${esc(c.requires.join(", "))}` : "";
     const rows = (c.steps as StepDef[]).map((s) => {
       const ref = stepRef(c.file, s.n);
       const v = eventsNamed("step.verdict").find((e) => e.step === ref);
@@ -38,7 +43,8 @@ export function buildReport(journal: JournalEvent[]): string {
     const covers = (c.covers as string[]).join(", ") || "nothing";
     return `<section>
 <h2>${badge(verdict)} ${esc(c.title)}</h2>
-<p><small>${esc(c.file)} · covers ${esc(covers)}</small></p>
+<p><small>${esc(c.file)} · covers ${esc(covers)}${startsFrom}</small></p>
+${skippedBecause}
 <table><tr><th>#</th><th>Step</th><th>Verdict</th><th>Judgments</th><th>Evidence</th></tr>
 ${rows}
 </table>

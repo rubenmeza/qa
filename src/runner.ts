@@ -4,7 +4,9 @@ import type { Journal } from "./journal.ts";
 import { candidates, takeSnapshot } from "./page-snapshot.ts";
 import { resolveVariables, stepRef, variableNames, type Step, type TestCase, type TestData } from "./test-case.ts";
 
-export type Verdict = "Passed" | "Failed" | "Needs Review";
+export type Verdict = "Passed" | "Failed" | "Needs Review" | "Skipped";
+/** A Verdict reached by running: only a whole Test Case can be Skipped, by the Run. */
+export type JudgedVerdict = Exclude<Verdict, "Skipped">;
 
 export type Options = {
   /** Probability at or above which a judgment counts as yes. */
@@ -22,8 +24,8 @@ export type Options = {
 export const DEFAULT_OPTIONS: Options = { pass: 0.9, fail: 0.1, stepTimeoutMs: 5000, settleMs: 300, changeTimeoutMs: 2000 };
 
 /** A Step's Verdict and the reason for it. */
-export type StepVerdict = { n: number; verdict: Verdict; why: string };
-export type CaseVerdict = { verdict: Verdict; steps: StepVerdict[] };
+export type StepVerdict = { n: number; verdict: JudgedVerdict; why: string };
+export type CaseVerdict = { verdict: JudgedVerdict; steps: StepVerdict[] };
 type Judged = Omit<StepVerdict, "n">;
 
 type Deps = { page: Page; judge: Judge; testData: TestData; journal: Journal; options?: Partial<Options> };
@@ -52,7 +54,8 @@ export async function runTestCase(testCase: TestCase, deps: Deps): Promise<CaseV
     attach: deps.journal.attach,
   };
   const ctx: StepContext = { ...deps, journal, opts: { ...DEFAULT_OPTIONS, ...deps.options }, redact, ref: "" };
-  journal.record("case.started", { file: testCase.file, title: testCase.title, covers: testCase.covers, steps: testCase.steps });
+  const { file, title, covers, requires, steps: stepDefs } = testCase;
+  journal.record("case.started", { file, title, covers, requires, steps: stepDefs });
 
   const steps: StepVerdict[] = [];
   for (const step of testCase.steps) {

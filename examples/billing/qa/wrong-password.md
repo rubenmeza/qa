@@ -8,4 +8,4 @@ covers: ["#1/wrong-password"]
 - do: type "nope" into the password field
 - do: press "Enter"
 - expect: an error says the email or password is wrong
-- expect: no invoices are shown
+- expect: the sign-in form is still shown

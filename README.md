@@ -38,6 +38,11 @@ covers: ["#1/sign-in"]
 
 - Each Step is `do:` (an Action) or `expect:` (an Expectation).
 - Actions: open, click, type, select, press, wait for. The first word decides.
+- `requires: [sign-in]` starts the Test Case from the browser session `sign-in.md`
+  ended with (cookies and local storage), instead of repeating its Steps. Any Test
+  Case named in a `requires:` is a Setup: it runs once per Run, before the Test Cases
+  that require it. If it does not pass, they are Skipped. One Setup per Test Case; a
+  Setup may require another. The page itself is not kept: start with an `open` Step.
 - `"quoted"` Literals are used verbatim. `{{variables}}` come from `test-data.json`
   in the folder or an env file (`QA_ENV_FILE=.env.qa`). Their values are replaced by
   `{{name}}` before anything reaches Jev or the Journal.

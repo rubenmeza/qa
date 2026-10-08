@@ -24,6 +24,13 @@ export function useFixtureServer(inline: Record<string, string> = {}) {
   return ctx;
 }
 
+export function useBrowser() {
+  const ctx = {} as { browser: Browser };
+  beforeAll(async () => { ctx.browser = await chromium.launch(); });
+  afterAll(() => ctx.browser.close());
+  return ctx;
+}
+
 export function useBrowserPage() {
   let browser: Browser;
   const ctx = {} as { page: Page };

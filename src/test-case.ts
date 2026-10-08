@@ -5,7 +5,11 @@ export type Step = { n: number; kind: StepKind; text: string; literals: string[]
 
 export type TestData = Record<string, string>;
 
-export type TestCase = { file: string; title: string; covers: string[]; steps: Step[] };
+/**
+ * `name` is the file name without `.md`: how `requires:` refers to a Test Case.
+ * `requires` names the Setup this Test Case starts from (at most one, checked when planning the Run).
+ */
+export type TestCase = { file: string; name: string; title: string; covers: string[]; requires: string[]; steps: Step[] };
 
 export function parseTestCase(file: string, markdown: string): TestCase {
   const frontMatter = markdown.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
@@ -21,15 +25,17 @@ export function parseTestCase(file: string, markdown: string): TestCase {
   }
   return {
     file,
+    name: file.replace(/^.*\//, "").replace(/\.md$/, ""),
     title: markdown.match(/^# (.+?)\s*$/m)?.[1] ?? file,
-    covers: parseCovers(frontMatter),
+    covers: parseList(frontMatter, "covers"),
+    requires: parseList(frontMatter, "requires"),
     steps,
   };
 }
 
-/** `covers:` as an inline list (`[#1/a, "#2/b"]`) or a YAML block list. */
-function parseCovers(frontMatter: string): string[] {
-  const m = frontMatter.match(/^covers:[ \t]*(.*)\n?((?:[ \t]+-.*\n?)*)/m);
+/** A front-matter list, inline (`key: [#1/a, "#2/b"]`) or as a YAML block list. */
+function parseList(frontMatter: string, key: string): string[] {
+  const m = frontMatter.match(new RegExp(`^${key}:[ \\t]*(.*)\\n?((?:[ \\t]+-.*\\n?)*)`, "m"));
   if (!m) return [];
   const items = m[1].trim() ? m[1].trim().replace(/^\[|\]$/g, "").split(",") : m[2].split("\n").map((l) => l.replace(/^\s*-/, ""));
   return items.map((i) => i.trim().replace(/^["']|["']$/g, "")).filter(Boolean);
