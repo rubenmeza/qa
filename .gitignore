@@ -1,3 +1,4 @@
 node_modules/
 prototype/*/runs/
 qa-runs/
+.env
