@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Shop</title></head>
+<body>
+  <label>Plan <select><option>Free</option><option>Pro</option></select></label>
+  <label>Search <input id="q" type="search"></label>
+  <label><input type="checkbox"> Newsletter</label>
+  <p id="out"></p>
+  <script>
+    document.getElementById("q").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") setTimeout(() => { out.textContent = "Results for " + e.target.value; }, 400);
+    });
+  </script>
+</body>
+</html>
