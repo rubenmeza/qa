@@ -41,6 +41,14 @@ Replace manual QA of the user's web apps: plain-language Test Cases run against 
 - OpenRouter's Decisions API (`/alpha/decisions`) takes the same Noul / Choice / Score shape and accepts images as `image_url` parts in `state`; Oligarchy verified it against `openai/gpt-6-luna-decisions` on 2026-10-07 (`packages/openrouter/README.md`, `packages/decision-api`).
 - Oligarchy patterns worth reading before building: `field-guide/drive-harness.md` (journal, layered model decisions, tools as reply contract), `v2/next/4-decision-loop.md` (cheap model first, thresholds `doneAbove` / `notDoneBelow`, band escalates), `packages/drive-harness/src/steps.ts` (ActionList parsing).
 
+## Prototype findings
+
+Slice 1 (`do:` + `expect:`, Jev only, Docker + Playwright, JSONL Journal, HTML report) ran live on 2026-10-08; the code is kept on branch `prototype/slice-1`, see its README.
+
+- Jev on the Page Snapshot works: correct targets at p ≥ 0.99 and clear Expectation probabilities, ~150–480 ms and ~500 tokens per judgment. A report built from the Journal alone is enough.
+- Settling (#8) alone does not catch client-side delays; the re-judge-on-change loop is required, not optional. An Expectation also true of the page before the Action can Pass too early: the real build must deal with this, e.g. by waiting for the page to change after an Action.
+- Negative Expectations ("no X is shown") score lower (0.91 vs 0.98–0.99). Watch for them when calibrating (#7).
+
 ## Next
 
 Break this into GitHub issues (one vertical slice first: one Test Case, `do:` + `expect:` only, Jev only, local report), then implement on explicit request.
