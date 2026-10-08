@@ -1,0 +1,7 @@
+{
+  "name": "qa",
+  "private": true,
+  "scripts": {
+    "proto:slice-1": "docker build -q -t qa-proto-slice-1 prototype/slice-1 && mkdir -p prototype/slice-1/runs && docker run --rm --init --ipc=host -e TYPESAFE_API_KEY -e HOME=/tmp --user \"$(id -u):$(id -g)\" -v \"$PWD/prototype/slice-1/runs:/app/runs\" qa-proto-slice-1"
+  }
+}

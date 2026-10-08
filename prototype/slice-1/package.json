@@ -1,0 +1,13 @@
+{
+  "name": "qa-prototype-slice-1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx run.ts && tsx report.ts"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "0.6.0",
+    "playwright": "1.63.0",
+    "tsx": "4.23.15"
+  }
+}

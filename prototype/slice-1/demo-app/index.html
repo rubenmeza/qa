@@ -1,0 +1,42 @@
+<!doctype html>
+<!-- PROTOTYPE demo Application Under Test: throwaway -->
+<html lang="en">
+<head><meta charset="utf-8"><title>Acme Billing</title></head>
+<body>
+  <main id="app">
+    <h1>Acme Billing</h1>
+    <form id="login">
+      <h2>Sign in</h2>
+      <label>Email <input name="email" type="email"></label>
+      <label>Password <input name="password" type="password"></label>
+      <button type="submit">Sign in</button>
+      <p id="error" role="alert"></p>
+    </form>
+  </main>
+  <script>
+    document.getElementById("login").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      // Fake network latency so the settle logic has something to wait for.
+      setTimeout(() => {
+        if (f.get("email") === "ada@example.com" && f.get("password") === "hunter2") {
+          document.getElementById("app").innerHTML = `
+            <h1>Acme Billing</h1>
+            <p>Welcome back, Ada!</p>
+            <h2>Invoices</h2>
+            <table>
+              <thead><tr><th>Number</th><th>Customer</th><th>Total</th></tr></thead>
+              <tbody>
+                <tr><td>INV-001</td><td>Globex</td><td>$1,200.00</td></tr>
+                <tr><td>INV-002</td><td>Initech</td><td>$480.00</td></tr>
+              </tbody>
+            </table>
+            <button>Sign out</button>`;
+        } else {
+          document.getElementById("error").textContent = "Wrong email or password.";
+        }
+      }, 600);
+    });
+  </script>
+</body>
+</html>
