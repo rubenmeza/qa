@@ -4,6 +4,7 @@ import type { IssueReader } from "./acceptance-criteria.ts";
 export function githubIssueReader(repo: string, token = process.env.GITHUB_TOKEN): IssueReader {
   return {
     repo,
+    url: (issue) => `https://github.com/${repo}/issues/${issue}`,
     async read(issue) {
       const res = await fetch(`https://api.github.com/repos/${repo}/issues/${issue}`, {
         headers: {

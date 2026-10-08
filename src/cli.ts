@@ -4,7 +4,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { chromium } from "playwright";
-import { evaluateCriteria, readCoveredIssues, type IssueReader } from "./acceptance-criteria.ts";
+import { evaluateCriteria, readCoveredIssues, type IssueReader, type Standing } from "./acceptance-criteria.ts";
 import { githubIssueReader, repoFromRemote } from "./github.ts";
 import { JEV_MODEL, jevJudge } from "./judge.ts";
 import { fileJournal, JOURNAL_FILE, type Journal, type JournalEvent } from "./journal.ts";
@@ -87,16 +87,20 @@ function gitRemote(dir: string): string {
 
 function issueReader(repo: string | undefined): IssueReader {
   if (repo) return githubIssueReader(repo);
-  return { repo: "unknown", read: async () => { throw new Error("no GitHub repo: pass --repo owner/name or set QA_GITHUB_REPO"); } };
+  return {
+    repo: "unknown",
+    url: () => undefined,
+    read: async () => { throw new Error("no GitHub repo: pass --repo owner/name or set QA_GITHUB_REPO"); },
+  };
 }
 
 function printCriteria(events: JournalEvent[]) {
   const { criteria, problems } = evaluateCriteria(events);
   if (!criteria.length && !problems.length) return;
-  const count = (status: string) => criteria.filter((c) => c.status === status).length;
+  const count = (standing: Standing) => criteria.filter((c) => c.standing === standing).length;
   console.log(`\nAcceptance Criteria: ${count("Met")} Met, ${count("Unmet")} Unmet, ${count("Unverified")} Unverified`);
   for (const c of criteria) {
-    if (c.status !== "Met") console.log(`  ${c.status}: #${c.issue}${c.tag ? `/${c.tag}` : ""} ${c.text}${c.warning ? ` (${c.warning})` : ""}`);
+    if (c.standing !== "Met") console.log(`  ${c.standing}: #${c.issue}${c.tag ? `/${c.tag}` : ""} ${c.text}${c.warning ? ` (${c.warning})` : ""}`);
   }
   for (const p of problems) console.log(`  ${p.file} covers ${p.cover}: ${p.problem}`);
 }

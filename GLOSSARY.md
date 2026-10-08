@@ -8,6 +8,10 @@ Automated replacement for manual QA: plain-language test cases run against a web
 One agreed statement of what the Application Under Test must let a user do or see: a tagged checklist item in an issue. Met when every Test Case covering it Passed, Unmet when any Failed, otherwise Unverified.
 _Avoid_: Agreement, requirement, user story
 
+**Standing**:
+Where an Acceptance Criterion stands after a Run: Met, Unmet or Unverified, from the Verdicts of the Test Cases covering it.
+_Avoid_: Status, result, Verdict
+
 **Criterion Tag**:
 The short name written in an Acceptance Criterion's own text that identifies it, together with its issue, however the issue is later reordered or edited.
 _Avoid_: Criterion number, index

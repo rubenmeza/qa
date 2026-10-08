@@ -1,5 +1,5 @@
-import { evaluateCriteria, type CriterionStatus } from "./acceptance-criteria.ts";
-import type { JournalEvent } from "./journal.ts";
+import { evaluateCriteria, type Standing } from "./acceptance-criteria.ts";
+import { casesIn, type JournalEvent } from "./journal.ts";
 import type { Verdict } from "./run-test-case.ts";
 import { stepRef } from "./test-case.ts";
 
@@ -16,27 +16,20 @@ const badge = (verdict?: Verdict) =>
 
 type StepDef = { n: number; kind: string; text: string };
 
-const STATUS_COLOR: Record<CriterionStatus, string> = { Met: "#1a7f37", Unmet: "#cf222e", Unverified: "#9a6700" };
+const STANDING_COLOR: Record<Standing, string> = { Met: "#1a7f37", Unmet: "#cf222e", Unverified: "#9a6700" };
 const caseAnchor = (file: string) => `case-${file}`;
 
-/** The Acceptance Criteria table: each criterion of the covered issues, its status and covering Test Cases. */
+/** The Acceptance Criteria table: each criterion of the covered issues, its Standing and covering Test Cases. */
 function criteriaSection(events: Array<Record<string, any>>): string {
   const { criteria, problems } = evaluateCriteria(events);
   if (!criteria.length && !problems.length) return "";
-  const issueUrl = new Map<number, string>();
-  const caseTitle = new Map<string, string>();
-  for (const e of events) {
-    if (e.event === "issue.read") issueUrl.set(e.issue, e.url);
-    if (e.event === "issue.unreadable") issueUrl.set(e.issue, `https://github.com/${e.repo}/issues/${e.issue}`);
-    if (e.event === "case.started" || e.event === "case.skipped") caseTitle.set(e.file, e.title);
-  }
   const rows = criteria.map((c) => {
-    const id = c.tag ? `#${c.issue}/${c.tag}` : `#${c.issue}`;
-    const by = c.coveredBy.map((b) => `<a href="#${esc(caseAnchor(b.file))}">${esc(caseTitle.get(b.file) ?? b.file)}</a> ${badge(b.verdict as Verdict | undefined)}`);
+    const id = esc(c.tag ? `#${c.issue}/${c.tag}` : `#${c.issue}`);
+    const by = c.coveredBy.map((b) => `<a href="#${esc(caseAnchor(b.file))}">${esc(b.title)}</a> ${badge(b.verdict)}`);
     return `<tr>
-  <td><a href="${esc(issueUrl.get(c.issue) ?? "")}">${esc(id)}</a></td>
+  <td>${c.url ? `<a href="${esc(c.url)}">${id}</a>` : id}</td>
   <td>${esc(c.text)}</td>
-  <td><b style="color:${STATUS_COLOR[c.status]}">${c.status}</b>${c.warning ? `<br><small>${esc(c.warning)}</small>` : ""}</td>
+  <td><b style="color:${STANDING_COLOR[c.standing]}">${c.standing}</b>${c.warning ? `<br><small>${esc(c.warning)}</small>` : ""}</td>
   <td>${by.join("<br>") || "<small>no Test Case covers it</small>"}</td>
 </tr>`;
   }).join("\n");
@@ -45,7 +38,7 @@ function criteriaSection(events: Array<Record<string, any>>): string {
     : "";
   return `<section>
 <h2>Acceptance Criteria</h2>
-<table><tr><th>Criterion</th><th>Text</th><th>Status</th><th>Covered by</th></tr>
+<table><tr><th>Criterion</th><th>Text</th><th>Standing</th><th>Covered by</th></tr>
 ${rows}
 </table>
 ${problemList}
@@ -60,7 +53,7 @@ export function buildReport(journal: JournalEvent[]): string {
   const run = eventsNamed("run.started")[0] ?? {};
 
   // Test Cases in Journal order: the ones that ran, and the ones Skipped because of their Setup.
-  const cases = events.filter((e) => e.event === "case.started" || e.event === "case.skipped").map((c) => {
+  const cases = casesIn(events).map((c) => {
     const caseVerdict = eventsNamed("case.verdict").find((e) => e.file === c.file);
     const verdict = caseVerdict?.verdict;
     const skippedBecause = verdict === "Skipped" ? `<p>Skipped: ${esc(skipReason(caseVerdict!))}</p>` : "";

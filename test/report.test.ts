@@ -78,6 +78,15 @@ describe("buildReport with Acceptance Criteria", () => {
     expect(html).toContain("list.md covers #7/nope: #7 has no Acceptance Criterion tagged [nope]");
   });
 
+  it("links no issue it has no address for", () => {
+    const unknownRepo = buildReport([
+      { ts, event: "issue.unreadable", repo: "unknown", issue: 7, error: "no GitHub repo" },
+      { ts, event: "case.started", file: "list.md", title: "List invoices", covers: ["#7/list"], requires: [], steps: [] },
+    ]);
+    expect(unknownRepo).toContain("#7/list");
+    expect(unknownRepo).not.toContain("github.com/unknown");
+  });
+
   it("leaves the table out when no Test Case covers anything", () => {
     expect(buildReport([{ ts, event: "run.started", runId: "r4" }])).not.toContain("Acceptance Criteria");
   });

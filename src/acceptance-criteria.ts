@@ -1,20 +1,23 @@
-import type { Journal } from "./journal.ts";
+import { casesIn, type Journal } from "./journal.ts";
+import type { Verdict } from "./run-test-case.ts";
 import type { TestCase } from "./test-case.ts";
 
 /** A checklist item under an issue's `## Acceptance criteria` heading; `tag` is its Criterion Tag. */
 export type Criterion = { tag: string | undefined; text: string };
 
-/** Reads the checklist items under the `Acceptance criteria` heading, up to the next heading. */
+/** Reads the checklist items under the `Acceptance criteria` heading, up to the next heading of its level or higher. */
 export function parseAcceptanceCriteria(issueBody: string): Criterion[] {
   const criteria: Criterion[] = [];
-  let inSection = false;
+  let sectionLevel = 0; // heading level of the open section; 0 when outside it
   for (const line of issueBody.split(/\r?\n/)) {
-    const heading = line.match(/^#{1,6}\s+(.*?)\s*$/);
+    const heading = line.match(/^(#{1,6})\s+(.*?)\s*$/);
     if (heading) {
-      inSection = /^acceptance criteria$/i.test(heading[1]);
+      const level = heading[1].length;
+      if (/^acceptance criteria$/i.test(heading[2])) sectionLevel = level;
+      else if (level <= sectionLevel) sectionLevel = 0;
       continue;
     }
-    const item = inSection && line.match(/^\s*[-*] \[[ xX]\]\s+(?:\[([\w-]+)\]\s+)?(.+?)\s*$/);
+    const item = sectionLevel > 0 && line.match(/^\s*[-*] \[[ xX]\]\s+(?:\[([\w-]+)\]\s+)?(.+?)\s*$/);
     if (item) criteria.push({ tag: item[1], text: item[2] });
   }
   return criteria;
@@ -26,12 +29,16 @@ export function parseCriterionId(id: string): { issue: number; tag: string } | u
   return m ? { issue: Number(m[1]), tag: m[2] } : undefined;
 }
 
-export type CriterionStatus = "Met" | "Unmet" | "Unverified";
+export type Standing = "Met" | "Unmet" | "Unverified";
+
+export type CoveringCase = { file: string; title: string; verdict: Verdict | undefined };
 
 export type EvaluatedCriterion = Criterion & {
   issue: number;
-  status: CriterionStatus;
-  coveredBy: { file: string; verdict: string | undefined }[];
+  /** Where the issue lives, when known. */
+  url: string | undefined;
+  standing: Standing;
+  coveredBy: CoveringCase[];
   warning?: string;
 };
 
@@ -41,36 +48,45 @@ export type CoverProblem = { file: string; cover: string; problem: string };
 type Event = Record<string, any>;
 
 /**
- * Each Acceptance Criterion of the issues read in a Run, with its status from the Test
+ * Each Acceptance Criterion of the issues read in a Run, with its Standing from the Test
  * Cases covering it: Met when every one Passed, Unmet when any Failed, otherwise Unverified.
  */
 export function evaluateCriteria(events: Event[]): { criteria: EvaluatedCriterion[]; problems: CoverProblem[] } {
-  const verdictOf = new Map<string, string>(events.filter((e) => e.event === "case.verdict").map((e) => [e.file, e.verdict]));
-  const covers = events
-    .filter((e) => e.event === "case.started" || e.event === "case.skipped")
-    .flatMap((e) => (e.covers as string[]).map((cover) => ({ file: e.file as string, cover, id: parseCriterionId(cover) })));
-  const coveredBy = (issue: number, tag: string) =>
-    covers.filter((c) => c.id?.issue === issue && c.id.tag === tag).map((c) => ({ file: c.file, verdict: verdictOf.get(c.file) }));
+  const verdictOf = new Map<string, Verdict>(events.filter((e) => e.event === "case.verdict").map((e) => [e.file, e.verdict]));
+  const covers = casesIn(events).flatMap((e) =>
+    (e.covers as string[]).map((cover) => ({ file: e.file as string, title: e.title as string, cover, id: parseCriterionId(cover) })),
+  );
+  const coveringCases = (issue: number, tag: string): CoveringCase[] =>
+    covers
+      .filter((c) => c.id?.issue === issue && c.id.tag === tag)
+      .map(({ file, title }) => ({ file, title, verdict: verdictOf.get(file) }));
 
   const criteria: EvaluatedCriterion[] = [];
-  const read = new Map<number, Criterion[]>();
+  const criteriaByIssue = new Map<number, Criterion[]>();
   for (const e of events) {
     if (e.event === "issue.read") {
       const items = parseAcceptanceCriteria(e.body);
-      read.set(e.issue, items);
+      criteriaByIssue.set(e.issue, items);
+      const seen = new Set<string>();
       for (const item of items) {
+        const base = { ...item, issue: e.issue as number, url: e.url as string };
         if (!item.tag) {
-          criteria.push({ ...item, issue: e.issue, status: "Unverified", coveredBy: [], warning: "needs tag" });
+          criteria.push({ ...base, standing: "Unverified", coveredBy: [], warning: "needs tag" });
           continue;
         }
-        const by = coveredBy(e.issue, item.tag);
-        criteria.push({ ...item, issue: e.issue, status: statusOf(by), coveredBy: by });
+        const coveredBy = coveringCases(e.issue, item.tag);
+        const repeated = seen.has(item.tag) ? { warning: `tag [${item.tag}] is used twice in #${e.issue}` } : {};
+        seen.add(item.tag);
+        criteria.push({ ...base, standing: standingOf(coveredBy), coveredBy, ...repeated });
       }
     }
     if (e.event === "issue.unreadable") {
       const tags = [...new Set(covers.filter((c) => c.id?.issue === e.issue).map((c) => c.id!.tag))];
       for (const tag of tags) {
-        criteria.push({ tag, text: "", issue: e.issue, status: "Unverified", coveredBy: coveredBy(e.issue, tag), warning: `could not read #${e.issue}: ${e.error}` });
+        criteria.push({
+          tag, text: "", issue: e.issue, url: e.url, standing: "Unverified",
+          coveredBy: coveringCases(e.issue, tag), warning: `could not read #${e.issue}: ${e.error}`,
+        });
       }
     }
   }
@@ -78,22 +94,24 @@ export function evaluateCriteria(events: Event[]): { criteria: EvaluatedCriterio
   const problems: CoverProblem[] = [];
   for (const { file, cover, id } of covers) {
     if (!id) problems.push({ file, cover, problem: "not an Acceptance Criterion ID like #123/tag" });
-    else if (read.has(id.issue) && !read.get(id.issue)!.some((c) => c.tag === id.tag)) {
+    else if (criteriaByIssue.get(id.issue)?.every((c) => c.tag !== id.tag)) {
       problems.push({ file, cover, problem: `#${id.issue} has no Acceptance Criterion tagged [${id.tag}]` });
     }
   }
   return { criteria, problems };
 }
 
-function statusOf(coveredBy: { verdict: string | undefined }[]): CriterionStatus {
+function standingOf(coveredBy: CoveringCase[]): Standing {
   if (coveredBy.some((c) => c.verdict === "Failed")) return "Unmet";
   if (coveredBy.length && coveredBy.every((c) => c.verdict === "Passed")) return "Met";
   return "Unverified";
 }
 
-/** Reads issues of one GitHub repo. */
+/** Reads issues of one repo on an issue tracker. */
 export interface IssueReader {
   repo: string;
+  /** Where an issue lives, or undefined when the repo is unknown. */
+  url(issue: number): string | undefined;
   read(issue: number): Promise<{ title: string; body: string; url: string }>;
 }
 
@@ -108,7 +126,7 @@ export async function readCoveredIssues(testCases: TestCase[], reader: IssueRead
     try {
       journal.record("issue.read", { repo: reader.repo, issue, ...(await reader.read(issue)) });
     } catch (e) {
-      journal.record("issue.unreadable", { repo: reader.repo, issue, error: (e as Error).message });
+      journal.record("issue.unreadable", { repo: reader.repo, issue, url: reader.url(issue), error: (e as Error).message });
     }
   }
 }

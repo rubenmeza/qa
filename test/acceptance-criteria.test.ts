@@ -15,7 +15,10 @@ const ISSUE_BODY = `## What to build
 Some prose between items.
   - [ ] [nested] indented items count too
 
-### Notes
+### Edge cases
+- [ ] [in-subsection] items under a subheading still count
+
+## Notes
 - [ ] [after-section] not a criterion either
 `;
 
@@ -26,6 +29,7 @@ describe("parseAcceptanceCriteria", () => {
       { tag: "criterion-status", text: "Each one is Met, Unmet or Unverified" },
       { tag: undefined, text: "An item someone forgot to tag" },
       { tag: "nested", text: "indented items count too" },
+      { tag: "in-subsection", text: "items under a subheading still count" },
     ]);
   });
 
@@ -45,7 +49,7 @@ const issue7 = {
 - [ ] Totals look right`,
 };
 const ran = (file: string, covers: string[], verdict?: string) => [
-  { ts, event: "case.started", file, covers },
+  { ts, event: "case.started", file, title: file, covers },
   ...(verdict ? [{ ts, event: "case.verdict", file, verdict }] : []),
 ];
 
@@ -60,33 +64,34 @@ describe("evaluateCriteria", () => {
     { ts, event: "case.verdict", file: "filter-2.md", verdict: "Skipped" },
     ...ran("crashed.md", ["#7/list"]),
   ]);
-  const status = Object.fromEntries(criteria.map((c) => [c.tag ?? c.text, c.status]));
+  const standing = Object.fromEntries(criteria.map((c) => [c.tag ?? c.text, c.standing]));
 
   it("is Met only when every covering Test Case Passed", () => {
-    expect(status["list"]).toBe("Unverified"); // crashed.md has no Verdict
+    expect(standing["list"]).toBe("Unverified"); // crashed.md has no Verdict
     expect(evaluateCriteria([issue7, ...ran("list.md", ["#7/list"], "Passed")]).criteria[0])
-      .toMatchObject({ issue: 7, tag: "list", status: "Met", coveredBy: [{ file: "list.md", verdict: "Passed" }] });
+      .toMatchObject({ issue: 7, tag: "list", standing: "Met", url: "https://github.com/acme/billing/issues/7",
+        coveredBy: [{ file: "list.md", title: "list.md", verdict: "Passed" }] });
   });
 
   it("is Unmet when any covering Test Case Failed", () => {
-    expect(status["export"]).toBe("Unmet");
+    expect(standing["export"]).toBe("Unmet");
   });
 
   it("is otherwise Unverified, including with no Coverage", () => {
-    expect(status["filter"]).toBe("Unverified");
-    expect(status["paging"]).toBe("Unverified");
+    expect(standing["filter"]).toBe("Unverified");
+    expect(standing["paging"]).toBe("Unverified");
     expect(criteria.find((c) => c.tag === "paging")!.coveredBy).toEqual([]);
   });
 
   it("reports an untagged item as Unverified with a needs-tag warning", () => {
-    expect(criteria.at(-1)).toMatchObject({ tag: undefined, text: "Totals look right", status: "Unverified", warning: "needs tag" });
+    expect(criteria.at(-1)).toMatchObject({ tag: undefined, text: "Totals look right", standing: "Unverified", warning: "needs tag" });
     expect(problems).toEqual([]);
   });
 
   it("reports covers: entries that point at nothing", () => {
     const result = evaluateCriteria([
       issue7,
-      { ts, event: "issue.unreadable", issue: 9, repo: "acme/billing", error: "404 Not Found" },
+      { ts, event: "issue.unreadable", issue: 9, repo: "acme/billing", url: "https://github.com/acme/billing/issues/9", error: "404 Not Found" },
       ...ran("x.md", ["#7/nope", "export-pdf", "#9/login"], "Passed"),
     ]);
     expect(result.problems).toEqual([
@@ -94,8 +99,16 @@ describe("evaluateCriteria", () => {
       { file: "x.md", cover: "export-pdf", problem: "not an Acceptance Criterion ID like #123/tag" },
     ]);
     expect(result.criteria.find((c) => c.issue === 9)).toMatchObject({
-      tag: "login", status: "Unverified", warning: "could not read #9: 404 Not Found", coveredBy: [{ file: "x.md", verdict: "Passed" }],
+      tag: "login", standing: "Unverified", url: "https://github.com/acme/billing/issues/9", warning: "could not read #9: 404 Not Found",
+      coveredBy: [{ file: "x.md", verdict: "Passed" }],
     });
+  });
+});
+
+describe("evaluateCriteria with a repeated tag", () => {
+  it("warns on the second item using a Criterion Tag already used in the issue", () => {
+    const { criteria } = evaluateCriteria([{ ...issue7, body: "## Acceptance criteria\n- [ ] [list] A\n- [ ] [list] B" }]);
+    expect(criteria.map((c) => c.warning)).toEqual([undefined, "tag [list] is used twice in #7"]);
   });
 });
 
@@ -106,6 +119,7 @@ describe("readCoveredIssues", () => {
     const asked: number[] = [];
     const reader: IssueReader = {
       repo: "acme/billing",
+      url: (issue) => `https://github.com/acme/billing/issues/${issue}`,
       async read(issue) {
         asked.push(issue);
         if (issue === 9) throw new Error("404 Not Found");
@@ -118,7 +132,7 @@ describe("readCoveredIssues", () => {
     expect(asked).toEqual([7, 9]);
     expect(journal.events).toMatchObject([
       { event: "issue.read", repo: "acme/billing", issue: 7, title: "Issue 7", body: "## Acceptance criteria\n- [ ] [a] A" },
-      { event: "issue.unreadable", repo: "acme/billing", issue: 9, error: "404 Not Found" },
+      { event: "issue.unreadable", repo: "acme/billing", issue: 9, url: "https://github.com/acme/billing/issues/9", error: "404 Not Found" },
     ]);
   });
 });
