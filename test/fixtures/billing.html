@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Acme Billing</title></head>
+<body>
+  <main id="app">
+    <h1>Acme Billing</h1>
+    <form id="login">
+      <label>Email <input name="email" type="email"></label>
+      <label>Password <input name="password" type="password"></label>
+      <button type="submit">Sign in</button>
+      <p id="error" role="alert"></p>
+    </form>
+  </main>
+  <script>
+    document.getElementById("login").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      // Client-side delay: renders after any "network idle + unchanged for 300 ms" settle.
+      setTimeout(() => {
+        if (f.get("email") === "ada@example.com" && f.get("password") === "hunter2") {
+          document.getElementById("app").innerHTML =
+            "<h1>Acme Billing</h1><p>Welcome back, Ada!</p><h2>Invoices</h2>" +
+            "<ul><li>INV-001 Globex</li><li>INV-002 Initech</li></ul>";
+        } else {
+          document.getElementById("error").textContent = "Wrong email or password.";
+        }
+      }, 600);
+    });
+  </script>
+</body>
+</html>

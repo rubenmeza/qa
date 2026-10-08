@@ -1,0 +1,25 @@
+{
+  "name": "qa",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "qa": "./src/cli.ts"
+  },
+  "scripts": {
+    "qa": "tsx src/cli.ts",
+    "qa:docker": "bin/qa-docker",
+    "test": "vitest run",
+    "test:docker": "docker run --rm --init --ipc=host -e TYPESAFE_API_KEY -e HOME=/tmp --user \"$(id -u):$(id -g)\" -v \"$PWD:/work\" -w /work mcr.microsoft.com/playwright:v1.63.0-noble node_modules/.bin/vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "0.6.0",
+    "playwright": "1.63.0",
+    "tsx": "4.23.15"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "typescript": "^5.9",
+    "vitest": "^4"
+  }
+}

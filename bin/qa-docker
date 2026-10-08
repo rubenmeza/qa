@@ -1,0 +1,19 @@
+#!/bin/sh
+# Builds the qa image and runs `qa run` on a folder of Test Cases.
+# Runs go to <folder>/../qa-runs. The container shares the host network, so the
+# Test Cases can open an Application Under Test on localhost.
+# Test Data comes from <folder>/test-data.json, or an env file: QA_ENV_FILE=.env.qa
+set -eu
+folder=$(cd "${1:?usage: qa-docker <folder of Test Cases>}" && pwd)
+runs=$(dirname "$folder")/qa-runs
+root=$(cd "$(dirname "$0")/.." && pwd)
+mkdir -p "$runs"
+docker build -q -t qa "$root" >/dev/null
+set -- docker run --rm --init --ipc=host --network host \
+  -e TYPESAFE_API_KEY -e HOME=/tmp --user "$(id -u):$(id -g)" \
+  -v "$folder:/work/qa:ro" -v "$runs:/work/qa-runs"
+if [ -n "${QA_ENV_FILE:-}" ]; then set -- "$@" --env-file "$QA_ENV_FILE"; fi
+status=0
+"$@" qa run /work/qa --out /work/qa-runs || status=$?
+echo "(/work/qa-runs is $runs on this machine)"
+exit $status
